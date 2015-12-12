@@ -43,6 +43,8 @@ typedef struct Series_s{
 	unsigned int next_job_to_clean; //The next job number which a cleaner has to clean.
 	HANDLE mutex_building;			//A handle to the mutex for accessing buildng related indicators
 	unsigned int next_job_to_build; //Next job number which a builder has to built 
+	int job_size;
+	int sub_num_jobs;
 } Series;
 
 //--------Function Declarations--------//
