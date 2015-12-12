@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <WinBase.h>
 //--------Project Includs--------//
+#include "common.h"
 //--------Definations--------//
 typedef enum{
 	EMPTY=0,	//the data on the JobObject is not valid and no worker is working on this Job(see JobObject defintion) 
