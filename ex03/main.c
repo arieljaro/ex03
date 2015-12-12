@@ -67,19 +67,19 @@ int main(int argc, char *argv[])
 	int N;
 	int job_size;
 	int sub_seq_length;
-	int failure_period;
+	//int failure_period;
 	int a1;
 	int d;
 	int q;
 	int sub_num_jobs;
 	Series arithmetic_series;
-	Series geometric_series;
-	Series diffrential_between_arith_geom;
+	//Series geometric_series;
+	//Series diffrential_between_arith_geom;
 	int i;
 	HANDLE *threads_handles = NULL; //an array to hold the handles, the size isn't known during compilation time
 	DWORD *threads_id = NULL;
-	DWORD exitcode;
-	DWORD wait_code;
+	//DWORD exitcode;
+	//DWORD wait_code;
 
 	//checking parameters and print
 	if (!HandleParameters(

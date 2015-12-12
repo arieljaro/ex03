@@ -22,7 +22,7 @@ typedef enum{
 
 typedef enum{
 	NOTHING_TO_CLEAN=0, //There is nothing to clean in this series
-	CLEANING,			//There is one worker cleaning this series
+	CLEANING_IN_PROGRESS,			//There is one worker cleaning this series
 	JOBS_TO_CLEAN,		//There is one or more Jobs for cleaning in this series and no worker is already cleaning.
 } CleaningState;
 
