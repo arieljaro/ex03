@@ -1,7 +1,7 @@
 //Author://----// Adi Mashiah, ID:305205676//------//Reut Lev, ID:305259186//
 //Belongs to project: ex03
 //
-//depending files: 
+//depending files: common.h
 #ifndef WORKER_H
 #define WORKER_H
 //--------Library Includs--------//

@@ -60,6 +60,7 @@ BOOL HandleParameters(
 	int *q
 );
 //--------Implementation--------//
+//--------Main--------//
 int main(int argc, char *argv[])
 {
 	ErrorCode error_code = SUCCESS;
@@ -166,7 +167,7 @@ int main(int argc, char *argv[])
 return error_code;
 }
 
-
+//--------Functions used in main--------//
 
 /* Reads the parametes and sets their values in the corresponding parameters */
 BOOL HandleParameters(
