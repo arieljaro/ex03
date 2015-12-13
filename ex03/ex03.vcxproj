@@ -74,11 +74,17 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Builder.h" />
+    <ClInclude Include="Cleaner.h" />
     <ClInclude Include="common.h" />
+    <ClInclude Include="SimpleWinAPI.h" />
     <ClInclude Include="Worker.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Builder.c" />
+    <ClCompile Include="Cleaner.c" />
     <ClCompile Include="main.c" />
+    <ClCompile Include="SimpleWinAPI.c" />
     <ClCompile Include="Worker.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

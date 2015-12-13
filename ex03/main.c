@@ -2,14 +2,18 @@
 //Belongs to project: ex03
 //
 //depending files: 
+
 //--------Library Includs--------//
 #include <stdio.h>
 #include <windows.h>
 #include <stdlib.h>
 #include <WinBase.h>
 #include <tchar.h>
+
 //--------Project Includs--------//
 #include "Worker.h"
+#include "SimpleWinAPI.h"
+
 //--------Definations--------//
 #define INPUT_PARAMETERS_NUM (8)
 typedef enum {
@@ -22,6 +26,9 @@ typedef enum {
 	CMD_PARAMETER_D_OFFSET,
 	CMD_PARAMETER_Q_OFFSET,
 } CmdParameter;
+
+//--------Global Variables---------//
+HANDLE work_semaphore;
 
 //--------Function Declarations--------//
 /**
@@ -42,10 +49,10 @@ typedef enum {
 */
 HANDLE CreateThreadSimple(LPTHREAD_START_ROUTINE StartAddress,LPVOID ParameterPtr,LPDWORD ThreadIdPtr);
 //This function Initialize series type, 
-//initilize the fields inside: Including creating mutex, and fill job_size and sub_num_jobs
+//initilize the fields inside: Including creating mutex, and fill job_size and jobs_num
 //initilize the arrays inside the series type (Jobs array)
 //The function gets a pointer to series type and fill its field, including malloc fo required arrays
-BOOL IntializeSeries(Series *series, int job_size, int sub_num_jobs);
+BOOL IntializeSeries(Series *series, int job_size, int jobs_num);
 /* Reads the parametes and sets their values in the corresponding parameters */
 BOOL HandleParameters(
 	int argc,
@@ -72,7 +79,7 @@ int main(int argc, char *argv[])
 	int a1;
 	int d;
 	int q;
-	int sub_num_jobs;
+	int jobs_num;
 	Series arithmetic_series;
 	//Series geometric_series;
 	//Series diffrential_between_arith_geom;
@@ -116,8 +123,8 @@ int main(int argc, char *argv[])
 		d,
 		q
 	);
-	sub_num_jobs= sub_seq_length/job_size;
-	if(!IntializeSeries(&arithmetic_series, job_size, sub_num_jobs))
+	jobs_num= sub_seq_length/job_size;
+	if(!IntializeSeries(&arithmetic_series, job_size, jobs_num))
 	{
 		LOG_ERROR("Failed to intilize the arithmatic series");
 		error_code = INTIALIZE_SERIES_FAILED;
@@ -251,20 +258,7 @@ BOOL HandleParameters(
 	return TRUE;
 }
 
-HANDLE CreateThreadSimple(LPTHREAD_START_ROUTINE StartAddress,
-	LPVOID ParameterPtr,
-	LPDWORD ThreadIdPtr)
-{
-	return CreateThread(
-		NULL,            /*  default security attributes */
-		0,                /*  use default stack size */
-		StartAddress,    /*  thread function */
-		ParameterPtr,    /*  argument to thread function */
-		0,                /*  use default creation flags */
-		ThreadIdPtr);    /*  returns the thread identifier */	
-}
-
-BOOL IntializeSeries(Series *series, int job_size, int sub_num_jobs)
+BOOL IntializeSeries(Series *series, int job_size, int jobs_num)
 {
 	return TRUE;
 }
