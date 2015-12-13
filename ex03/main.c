@@ -15,7 +15,7 @@
 #include "SimpleWinAPI.h"
 
 //--------Definations--------//
-#define INPUT_PARAMETERS_NUM (8)
+#define INPUT_PARAMETERS_NUM (9)
 typedef enum {
 	CMD_PARAMETER_NUM_OF_WORKERS_OFFSET = 1,
 	CMD_PARAMETER_N_OFFSET,
@@ -260,5 +260,7 @@ BOOL HandleParameters(
 
 BOOL IntializeSeries(Series *series, int job_size, int jobs_num)
 {
+	series->job_size=job_size;
+	series->sub_num_jobs=sub_num_jobs;
 	return TRUE;
 }
