@@ -161,8 +161,7 @@ int main(int argc, char *argv[])
 	for (i=0; i < num_of_workers; i++)
 	{
 		threads_handles[i] = CreateThreadSimple(
-//			(LPTHREAD_START_ROUTINE)RunThread,
-			(LPTHREAD_START_ROUTINE)RunThreadTest,
+			(LPTHREAD_START_ROUTINE)RunThread,
 			&arithmetic_series,
 			(LPDWORD)&(threads_id[i])
 		);

@@ -30,6 +30,8 @@ BOOL RunThread (Series *series)
 	BOOL retval = FALSE;
 	BOOL result = FALSE;
 
+	LOG_INFO("Thread #%d started running", GetCurrentThreadId());
+
 	// Wait for work semaphore until there is work to do
 	dwWaitResult = WaitForSingleObject(work_semaphore, INFINITE);
 	if (dwWaitResult != WAIT_OBJECT_0) 
@@ -72,6 +74,8 @@ BOOL Clean(Series *series)
 	int i = 0;
 	int curr_job_id = 0;
 
+	LOG_INFO("Thread #%d started cleaning", GetCurrentThreadId());
+
 	// Wait until the building mutex is unlock
 	dwWaitResult = WaitForSingleObject(series->mutex_cleaning, INFINITE);
 	if (dwWaitResult != WAIT_OBJECT_0)
@@ -82,7 +86,10 @@ BOOL Clean(Series *series)
 
 	//-----------Cleaning Mutex Critical Section (I)------------//
 	is_series_ready_to_clean = (series->cleaning_state == JOBS_TO_CLEAN);
-	series->cleaning_state = CLEANING_IN_PROGRESS;
+	if (is_series_ready_to_clean)
+	{
+		series->cleaning_state = CLEANING_IN_PROGRESS;
+	}
 	//-------End Of Building Mutex Critical Section---------//
 
 	// release the cleaning mutex
@@ -117,6 +124,12 @@ BOOL Clean(Series *series)
 
 	while (series->jobs_array[curr_job_id].state == DONE)
 	{
+		LOG_INFO(
+			"Thread #%d started cleaning job id %d with starting index %d", 
+			GetCurrentThreadId(), 
+			curr_job_id, 
+			series->jobs_array[curr_job_id].starting_index
+		);
 		series->jobs_array[curr_job_id].state = CLEANING;
 		CleanJob(series, curr_job_id);
 		series->jobs_array[curr_job_id].state = EMPTY;
@@ -195,6 +208,8 @@ BOOL Build(Series *series)
 	int i = 0;
 	int j = 0;
 
+	LOG_INFO("Thread #%d started building", GetCurrentThreadId());
+
 	// Wait until the building mutex is unlock
 	dwWaitResult = WaitForSingleObject(series->mutex_building, INFINITE);
 	if (dwWaitResult != WAIT_OBJECT_0)
@@ -207,9 +222,16 @@ BOOL Build(Series *series)
 	has_found_job_in_series = (series->next_job_to_build != -1);
 
 	if (series->next_job_to_build != -1)
-	{	// Found a job to build
+	{	
+		// Found a job to build
 		curr_job_id = series->next_job_to_build;
 		series->jobs_array[curr_job_id].state = BUILDING;
+		LOG_INFO(
+			"Thread #%d started building job id %d with starting index %d", 
+			GetCurrentThreadId(), 
+			curr_job_id, 
+			series->jobs_array[curr_job_id].starting_index
+		);
 
 		// search for a new job to build
 		series->next_job_to_build = -1;
@@ -219,6 +241,8 @@ BOOL Build(Series *series)
 			if (series->jobs_array[j].state == EMPTY)
 			{
 				series->next_job_to_build = j;
+				LOG_INFO("Thread #%d: set next_job_to_build to %d", GetCurrentThreadId(), j);
+				break;
 			}
 			j = (j+1) % series->jobs_num;
 		}
