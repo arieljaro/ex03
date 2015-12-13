@@ -261,6 +261,6 @@ BOOL HandleParameters(
 BOOL IntializeSeries(Series *series, int job_size, int jobs_num)
 {
 	series->job_size=job_size;
-	series->sub_num_jobs=sub_num_jobs;
+	series->jobs_num = jobs_num;
 	return TRUE;
 }
