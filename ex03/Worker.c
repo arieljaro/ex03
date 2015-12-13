@@ -72,109 +72,105 @@ BOOL Clean(Series *series)
 	int i = 0;
 	int curr_job_id = 0;
 
-	// Search for a series to clean
-	for (i=0; i < SERIES_TYPES_COUNT; i++)
+	// Wait until the building mutex is unlock
+	dwWaitResult = WaitForSingleObject(series->mutex_cleaning, INFINITE);
+	if (dwWaitResult != WAIT_OBJECT_0)
 	{
-		// Wait until the building mutex is unlock
-		dwWaitResult = WaitForSingleObject(series->mutex_cleaning, INFINITE);
+		LOG_ERROR("Thread #%d: Failed to wait for cleaning mutex (wait result = %d)", GetCurrentThreadId(), dwWaitResult);
+		goto cleanup;
+	}
+
+	//-----------Cleaning Mutex Critical Section (I)------------//
+	is_series_ready_to_clean = (series->cleaning_state == JOBS_TO_CLEAN);
+	series->cleaning_state = CLEANING_IN_PROGRESS;
+	//-------End Of Building Mutex Critical Section---------//
+
+	// release the cleaning mutex
+	retval = ReleaseMutex(series->mutex_cleaning);
+	if (!retval)
+	{
+		LOG_ERROR(
+			"Thread #%d: Failed to release the cleaning mutex of series %d. (ReleaseMutex failed)",
+			GetCurrentThreadId(),
+			series->type
+		);
+		goto cleanup;
+	}
+
+	// if no job was found, try to build a job in the next series
+	if (!is_series_ready_to_clean)
+	{
+		continue;
+	}
+
+	curr_job_id = series->next_job_to_clean;
+	// verify that the curr_job_id state is effectively DONE
+	if (series->jobs_array[curr_job_id].state != DONE)
+	{
+		LOG_ERROR("Thread #%d: Something Wrong happened. Invariant was invalidated", GetCurrentThreadId());
+		goto cleanup;
+	}
+
+	while (series->jobs_array[curr_job_id].state == DONE)
+	{
+		series->jobs_array[curr_job_id].state = CLEANING;
+		CleanJob(series, curr_job_id);
+		series->jobs_array[curr_job_id].state = EMPTY;
+
+		// Now check if there was no job to build and set the next_job_to_build accordingly
+		// TBD: Do this just one time???
+		dwWaitResult = WaitForSingleObject(series->mutex_building, INFINITE);
 		if (dwWaitResult != WAIT_OBJECT_0)
 		{
-			LOG_ERROR("Thread #%d: Failed to wait for cleaning mutex (wait result = %d)", GetCurrentThreadId(), dwWaitResult);
+			LOG_ERROR("Thread #%d: Failed to wait for building mutex (wait result = %d)", GetCurrentThreadId(), dwWaitResult);
 			goto cleanup;
 		}
 
-		//-----------Cleaning Mutex Critical Section (I)------------//
-		is_series_ready_to_clean = (series->cleaning_state == JOBS_TO_CLEAN);
-		series->cleaning_state = CLEANING_IN_PROGRESS;
+		//-----------Building Mutex Critical Section------------//
+		if (series->next_job_to_build == -1)
+		{
+			series->next_job_to_build = curr_job_id;
+		}
 		//-------End Of Building Mutex Critical Section---------//
 
-		// release the cleaning mutex
-		retval = ReleaseMutex(series->mutex_cleaning);
+		// release the building mutex
+		retval = ReleaseMutex(series->mutex_building);
 		if (!retval)
 		{
 			LOG_ERROR(
-				"Thread #%d: Failed to release the cleaning mutex of series %d. (ReleaseMutex failed)",
+				"Thread #%d: Failed to release the building mutex of series %d. (ReleaseMutex failed)",
 				GetCurrentThreadId(),
 				series->type
 			);
 			goto cleanup;
 		}
 
-		// if no job was found, try to build a job in the next series
-		if (!is_series_ready_to_clean)
-		{
-			continue;
-		}
-
-		curr_job_id = series->next_job_to_clean;
-		// verify that the curr_job_id state is effectively DONE
-		if (series->jobs_array[curr_job_id].state != DONE)
-		{
-			LOG_ERROR("Thread #%d: Something Wrong happened. Invariant was invalidated", GetCurrentThreadId());
-			goto cleanup;
-		}
-
-		while (series->jobs_array[curr_job_id].state == DONE)
-		{
-			series->jobs_array[curr_job_id].state = CLEANING;
-			CleanJob(series, curr_job_id);
-			series->jobs_array[curr_job_id].state = EMPTY;
-
-			// Now check if there was no job to build and set the next_job_to_build accordingly
-			// TBD: Do this just one time???
-			dwWaitResult = WaitForSingleObject(series->mutex_building, INFINITE);
-			if (dwWaitResult != WAIT_OBJECT_0)
-			{
-				LOG_ERROR("Thread #%d: Failed to wait for building mutex (wait result = %d)", GetCurrentThreadId(), dwWaitResult);
-				goto cleanup;
-			}
-
-			//-----------Building Mutex Critical Section------------//
-			if (series->next_job_to_build == -1)
-			{
-				series->next_job_to_build = curr_job_id;
-			}
-			//-------End Of Building Mutex Critical Section---------//
-
-			// release the building mutex
-			retval = ReleaseMutex(series->mutex_building);
-			if (!retval)
-			{
-				LOG_ERROR(
-					"Thread #%d: Failed to release the building mutex of series %d. (ReleaseMutex failed)",
-					GetCurrentThreadId(),
-					series->type
-				);
-				goto cleanup;
-			}
-
-			// increment the curr_job_id to try cleaning the next job (if DONE)
-			curr_job_id++;
-		}
+		// increment the curr_job_id to try cleaning the next job (if DONE)
+		curr_job_id++;
+	}
 		
-		// Now change the cleaning state to NOTHING_TO_CLEAN
-		dwWaitResult = WaitForSingleObject(series->mutex_cleaning, INFINITE);
-		if (dwWaitResult != WAIT_OBJECT_0)
-		{
-			LOG_ERROR("Thread #%d: Failed to wait for cleaning mutex (wait result = %d)", GetCurrentThreadId(), dwWaitResult);
-			goto cleanup;
-		}
+	// Now change the cleaning state to NOTHING_TO_CLEAN
+	dwWaitResult = WaitForSingleObject(series->mutex_cleaning, INFINITE);
+	if (dwWaitResult != WAIT_OBJECT_0)
+	{
+		LOG_ERROR("Thread #%d: Failed to wait for cleaning mutex (wait result = %d)", GetCurrentThreadId(), dwWaitResult);
+		goto cleanup;
+	}
 
-		//-----------Cleaning Mutex Critical Section------------//
-		series->cleaning_state = NOTHING_TO_CLEAN;
-		//-------End Of Cleaning Mutex Critical Section---------//
+	//-----------Cleaning Mutex Critical Section------------//
+	series->cleaning_state = NOTHING_TO_CLEAN;
+	//-------End Of Cleaning Mutex Critical Section---------//
 
-		// release the cleaning mutex
-		retval = ReleaseMutex(series->mutex_cleaning);
-		if (!retval)
-		{
-			LOG_ERROR(
-				"Thread #%d: Failed to release the cleaning mutex of series %d. (ReleaseMutex failed)",
-				GetCurrentThreadId(),
-				series->type
-			);
-			goto cleanup;
-		}
+	// release the cleaning mutex
+	retval = ReleaseMutex(series->mutex_cleaning);
+	if (!retval)
+	{
+		LOG_ERROR(
+			"Thread #%d: Failed to release the cleaning mutex of series %d. (ReleaseMutex failed)",
+			GetCurrentThreadId(),
+			series->type
+		);
+		goto cleanup;
 	}
 	
 	result = TRUE;
@@ -195,88 +191,84 @@ BOOL Build(Series *series)
 	int i = 0;
 	int j = 0;
 
-	// Search for a series to build on
-	for (i=0; i < SERIES_TYPES_COUNT; i++)
+	// Wait until the building mutex is unlock
+	dwWaitResult = WaitForSingleObject(series->mutex_building, INFINITE);
+	if (dwWaitResult != WAIT_OBJECT_0)
 	{
-		// Wait until the building mutex is unlock
-		dwWaitResult = WaitForSingleObject(series->mutex_building, INFINITE);
-		if (dwWaitResult != WAIT_OBJECT_0)
+		LOG_ERROR("Thread #%d: Failed to wait for building mutex (wait result = %d)", GetCurrentThreadId(), dwWaitResult);
+		goto cleanup;
+	}
+
+	//-----------Building Mutex Critical Section------------//
+	has_found_job_in_series = (series->next_job_to_build != -1);
+
+	if (series->next_job_to_build != -1)
+	{	// Found a job to build
+		curr_job_id = series->next_job_to_build;
+		series->jobs_array[curr_job_id].state = BUILDING;
+
+		// search for a new job to build
+		series->next_job_to_build = -1;
+		j = curr_job_id + 1;
+		while (j < curr_job_id)
 		{
-			LOG_ERROR("Thread #%d: Failed to wait for building mutex (wait result = %d)", GetCurrentThreadId(), dwWaitResult);
-			goto cleanup;
-		}
-
-		//-----------Building Mutex Critical Section------------//
-		has_found_job_in_series = (series->next_job_to_build != -1);
-
-		if (series->next_job_to_build != -1)
-		{	// Found a job to build
-			curr_job_id = series->next_job_to_build;
-			series->jobs_array[curr_job_id].state = BUILDING;
-
-			// search for a new job to build
-			series->next_job_to_build = -1;
-			j = curr_job_id + 1;
-			while (j < curr_job_id)
+			if (series->jobs_array[j].state == EMPTY)
 			{
-				if (series->jobs_array[j].state == EMPTY)
-				{
-					series->next_job_to_build = j;
-				}
-				j = (j+1) % series->jobs_num;
+				series->next_job_to_build = j;
 			}
+			j = (j+1) % series->jobs_num;
 		}
-		//-------End Of Building Mutex Critical Section---------//
+	}
+	//-------End Of Building Mutex Critical Section---------//
 
-		// release the building mutex
-		retval = ReleaseMutex(series->mutex_building);
-		if (!retval)
+	// release the building mutex
+	retval = ReleaseMutex(series->mutex_building);
+	if (!retval)
+	{
+		LOG_ERROR(
+			"Thread #%d: Failed to release the building mutex of series %d. (ReleaseMutex failed)",
+			GetCurrentThreadId(),
+			series->type
+		);
+		goto cleanup;
+	}
+
+	// if no job was found, try to build a job in the next series
+	if (!has_found_job_in_series)
+	{
+		continue;
+	}
+
+	BuildJob(series, curr_job_id);
+
+	// Now check if the cleaning state should be changed
+	dwWaitResult = WaitForSingleObject(series->mutex_cleaning, INFINITE);
+	if (dwWaitResult != WAIT_OBJECT_0)
+	{
+		LOG_ERROR("Thread #%d: Failed to wait for cleaning mutex (wait result = %d)", GetCurrentThreadId(), dwWaitResult);
+		goto cleanup;
+	}
+
+	//-----------Cleaning Mutex Critical Section------------//
+	if (series->cleaning_state == NOTHING_TO_CLEAN)
+	{
+		if (series->next_job_to_clean == curr_job_id)
 		{
-			LOG_ERROR(
-				"Thread #%d: Failed to release the building mutex of series %d. (ReleaseMutex failed)",
-				GetCurrentThreadId(),
-				series->type
-			);
-			goto cleanup;
+			series->cleaning_state = JOBS_TO_CLEAN;
 		}
+	}
+	//-------End Of Cleaning Mutex Critical Section---------//
 
-		// if no job was found, try to build a job in the next series
-		if (!has_found_job_in_series)
-		{
-			continue;
-		}
-
-		BuildJob(series, curr_job_id);
-
-		// Now check if the cleaning state should be changed
-		dwWaitResult = WaitForSingleObject(series->mutex_cleaning, INFINITE);
-		if (dwWaitResult != WAIT_OBJECT_0)
-		{
-			LOG_ERROR("Thread #%d: Failed to wait for cleaning mutex (wait result = %d)", GetCurrentThreadId(), dwWaitResult);
-			goto cleanup;
-		}
-
-		//-----------Cleaning Mutex Critical Section------------//
-		if (series->cleaning_state == NOTHING_TO_CLEAN)
-		{
-			if (series->next_job_to_clean == curr_job_id)
-			{
-				series->cleaning_state = JOBS_TO_CLEAN;
-			}
-		}
-		//-------End Of Cleaning Mutex Critical Section---------//
-
-		// release the cleaning mutex
-		retval = ReleaseMutex(series->mutex_cleaning);
-		if (!retval)
-		{
-			LOG_ERROR(
-				"Thread #%d: Failed to release the cleaning mutex of series %d. (ReleaseMutex failed)",
-				GetCurrentThreadId(),
-				series->type
-			);
-			goto cleanup;
-		}
+	// release the cleaning mutex
+	retval = ReleaseMutex(series->mutex_cleaning);
+	if (!retval)
+	{
+		LOG_ERROR(
+			"Thread #%d: Failed to release the cleaning mutex of series %d. (ReleaseMutex failed)",
+			GetCurrentThreadId(),
+			series->type
+		);
+		goto cleanup;
 	}
 	
 	result = TRUE;
