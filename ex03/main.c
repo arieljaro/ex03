@@ -15,17 +15,17 @@
 #include "SimpleWinAPI.h"
 
 //--------Definitions--------//
-#define INPUT_PARAMETERS_NUM (9)
 #define NUM_OF_SERIES (3)
 typedef enum {
 	CMD_PARAMETER_NUM_OF_WORKERS_OFFSET = 1,
 	CMD_PARAMETER_N_OFFSET,
 	CMD_PARAMETER_JOB_SIZE_OFFSET,
 	CMD_PARAMETER_SUB_SEQ_LENGTH_OFFSET,
-	CMD_PARAMETER_FAILURE_PERIOD_OFFSET,
+//	CMD_PARAMETER_FAILURE_PERIOD_OFFSET,
 	CMD_PARAMETER_A1_OFFSET,
 	CMD_PARAMETER_D_OFFSET,
 	CMD_PARAMETER_Q_OFFSET,
+	CMD_PARAMETERS_NUM
 } CmdParameter;
 
 //--------Global Variables---------//
@@ -104,9 +104,9 @@ int main(int argc, char *argv[])
 			 N = %d \r\n \
 			 Job Size = %d \r\n \
 			 Sub Sequence Length = %d \r\n \
-			 A1 = %d \r\n \
-			 d = %d \r\n \
-			 q = %d",
+			 A1 = %f \r\n \
+			 d = %f \r\n \
+			 q = %f",
 		num_of_workers,
 		N,
 		job_size,
@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
 	}
 	
 	//----intilize The series structure---//
-	if(!IntializeSeries(&arithmetic_series, job_size, jobs_num,a1,d,q,ARITHMETIC))
+	if(!IntializeSeries(&arithmetic_series, job_size, jobs_num, a1, d, q, ARITHMETIC_SERIES))
 	{
 		LOG_ERROR("Failed to intilize the arithmatic series");
 		error_code = INTIALIZE_SERIES_FAILED;
@@ -214,7 +214,7 @@ int main(int argc, char *argv[])
 		threads_handles[i] = NULL;
 	}
 
-	Clean(&arithmetic_series);
+	//Clean(&arithmetic_series);
 
 	// If we reach this point then we set the error_code to success
 	error_code = SUCCESS;
@@ -263,6 +263,11 @@ cleanup:
 		}
 		free (arithmetic_series.jobs_array);
 	}
+
+	if (arithmetic_series.output_file != NULL)
+	{
+		fclose(arithmetic_series.output_file);
+	}
 	
 	LOG_INFO("Program End: 3 Series builder exited with exit code %d", error_code);
 	return error_code;
@@ -286,13 +291,13 @@ BOOL HandleParameters(
 	double atof_result;
 
 //check for validity of number of arguments
-	if (argc < INPUT_PARAMETERS_NUM)
+	if (argc < CMD_PARAMETERS_NUM)
 	{
 		LOG_ERROR("too few arguments were send to building series process, exiting");
 		return FALSE;
 	}
 	
-	if (argc > INPUT_PARAMETERS_NUM)
+	if (argc > CMD_PARAMETERS_NUM)
 	{
 		LOG_ERROR("too many arguments were send to building series process, exiting");
 		return FALSE;
@@ -342,7 +347,7 @@ BOOL HandleParameters(
 	atof_result = atof(argv[CMD_PARAMETER_D_OFFSET]);
 	if ((errno == ERANGE) || (errno == EINVAL))
 	{
-		LOG_ERROR("Wrong common difference in the arithmetic series - d parameter");
+		LOG_ERROR("Wrong common difference in the ARITHMETIC_SERIES series - d parameter");
 		return FALSE;
 	}
 	*d = (float)atof_result;
@@ -350,7 +355,7 @@ BOOL HandleParameters(
 	atof_result = atof(argv[CMD_PARAMETER_Q_OFFSET]);
 	if ((errno == ERANGE) || (errno == EINVAL))
 	{
-		LOG_ERROR("Wrong factor between the terms in the geometric series- q parameter");
+		LOG_ERROR("Wrong factor between the terms in the GEOMETRIC_SERIES series- q parameter");
 		return FALSE;
 	}
 	*q = (float)atof_result;
@@ -383,11 +388,12 @@ BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float
 	series->next_job_to_build = 0;
 	series->next_job_to_clean = 0;
 	series->cleaning_state    = NOTHING_TO_CLEAN;
+	series->output_file = NULL;
 	
 	// open the series output file
 	switch (series->type)
 	{
-		case ARITHMETIC:
+		case ARITHMETIC_SERIES:
 			output_filename = ARITHMETIC_OUTPUT_FILENAME;
 			break;
 		default:

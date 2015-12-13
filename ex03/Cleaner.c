@@ -29,7 +29,7 @@ BOOL CleanJob(Series *series, int job_id)
 	job = &(series->jobs_array[job_id]);
 
     //printing the data of all elements in the sector to the output file
-	for (index_within_sector = 1; index_within_sector < series->job_size; index_within_sector++)
+	for (index_within_sector = 0; index_within_sector < series->job_size; index_within_sector++)
     {
         //calculating the element index in series:
 		index_within_series = job->starting_index + index_within_sector;
@@ -37,10 +37,13 @@ BOOL CleanJob(Series *series, int job_id)
 		fprintf(
 			series->output_file, 
 			"Index #%d = %f, calculated by thread %ld @ %02d:%02d:%02d.%3d\n", 
-			index_within_series,
+			index_within_series + 1,
 			job->values_arr[index_within_sector],
 			job->builder_id,
-			job->built_time_arr[index_within_sector]
+			job->built_time_arr[index_within_sector].wHour,
+			job->built_time_arr[index_within_sector].wMinute,
+			job->built_time_arr[index_within_sector].wSecond,
+			job->built_time_arr[index_within_sector].wMilliseconds
 		);
 
 		// clean value

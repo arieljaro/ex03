@@ -23,18 +23,29 @@ BOOL BuildJob(Series *series, int job_id)
 	float q = series->q;
 	JobObject *current_job = &(series->jobs_array[job_id]);
 	BOOL result = FALSE;
-	DWORD thread_id =GetCurrentThreadId();
+	DWORD thread_id = GetCurrentThreadId();
 
 	current_job->builder_id = thread_id;
 
-	switch (series->type) 
+	switch (series->type)
 	{
-	case ARITHMETIC:
+	case ARITHMETIC_SERIES:
 		for (i = 0; i < series->job_size; i++)
 		{
-			current_job->values_arr[i] = a1 + d * (current_job->starting_index + i - 1);
+			current_job->values_arr[i] = a1 + d * (current_job->starting_index + i);
 			GetLocalTime(&current_job->built_time_arr[i]);
+			LOG_INFO(
+				"Index #%d = %f, calculated by thread %ld @ %02d:%02d:%02d.%3d\n", 
+				current_job->starting_index + i + 1,
+				current_job->values_arr[i],
+				current_job->builder_id,
+				current_job->built_time_arr[i].wHour,
+				current_job->built_time_arr[i].wMinute,
+				current_job->built_time_arr[i].wSecond,
+				current_job->built_time_arr[i].wMilliseconds
+			);
 		}
+		break;
 	default:
 		LOG_ERROR("Thread #%d: Found illegal series type (%d)", thread_id, series->type);
 		goto cleanup;

@@ -45,9 +45,9 @@ typedef struct JobObject_s{
 typedef JobObject *JobArray;
 
 typedef enum {
-	ARITHMETIC = 0,
-//	GEOMETRIC,
-//	DIFFERENTIAL,
+	ARITHMETIC_SERIES = 0,
+//	GEOMETRIC_SERIES,
+//	DIFFERENTIAL_SERIES,
 	SERIES_TYPES_COUNT
 } SeriesType;
 
@@ -71,6 +71,6 @@ typedef struct Series_s{
 BOOL RunThread (Series *series);
 
 // TBD: remove this - needed for phase 1 only
-BOOL Clean (Series *series);
+//BOOL Clean (Series *series);
 
 #endif //WORKER_H

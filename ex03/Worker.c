@@ -19,7 +19,7 @@
 HANDLE work_semaphore;
 
 //-----Function Declarations ----//
-BOOL Clean(Series *series);
+BOOL Clean(Series *series, BOOL *has_cleaned_series);
 
 BOOL Build(Series *series);
 
@@ -27,6 +27,7 @@ BOOL Build(Series *series);
 BOOL RunThread (Series *series)
 {
 	DWORD dwWaitResult;
+	BOOL has_cleaned_series = FALSE;
 	BOOL retval = FALSE;
 	BOOL result = FALSE;
 
@@ -40,10 +41,19 @@ BOOL RunThread (Series *series)
 		goto cleanup;
 	}
 
-	if(!Build(series))
+	if (!Clean(series, &has_cleaned_series))
 	{
-		LOG_ERROR("Thread #%d: Failed to build the series", GetCurrentThreadId());
+		LOG_ERROR("Thread #%d: Failed to clean the series", GetCurrentThreadId());
 		goto cleanup;
+	}
+
+	if (!has_cleaned_series)
+	{
+		if(!Build(series))
+		{
+			LOG_ERROR("Thread #%d: Failed to build the series", GetCurrentThreadId());
+			goto cleanup;
+		}
 	}
 
 	// release work semaphore
@@ -65,7 +75,7 @@ cleanup:
 }
 
 
-BOOL Clean(Series *series)
+BOOL Clean(Series *series, BOOL *has_cleaned_series)
 {
 	DWORD dwWaitResult;
 	BOOL retval = FALSE;
@@ -110,9 +120,12 @@ BOOL Clean(Series *series)
 		// TBD: this should allow us to move to the next series
 		//continue;
 		LOG_INFO("Thread #%d: Nothing to clean in series %d", GetCurrentThreadId(), series->type);
+		*has_cleaned_series = FALSE;
 		result = TRUE;
 		goto cleanup;
 	}
+
+	*has_cleaned_series = TRUE;
 
 	curr_job_id = series->next_job_to_clean;
 	// verify that the curr_job_id state is effectively DONE
@@ -207,6 +220,7 @@ BOOL Build(Series *series)
 	int curr_job_id = -1;
 	int i = 0;
 	int j = 0;
+	int k = 0;
 
 	LOG_INFO("Thread #%d started building", GetCurrentThreadId());
 
@@ -236,7 +250,7 @@ BOOL Build(Series *series)
 		// search for a new job to build
 		series->next_job_to_build = -1;
 		j = curr_job_id + 1;
-		while (j < curr_job_id)
+		for (k = 0; k < series->jobs_num; k++)
 		{
 			if (series->jobs_array[j].state == EMPTY)
 			{
@@ -272,6 +286,7 @@ BOOL Build(Series *series)
 	}
 
 	BuildJob(series, curr_job_id);
+	series->jobs_array[curr_job_id].state = DONE;
 
 	// Now check if the cleaning state should be changed
 	dwWaitResult = WaitForSingleObject(series->mutex_cleaning, INFINITE);
