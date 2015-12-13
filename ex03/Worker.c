@@ -100,7 +100,11 @@ BOOL Clean(Series *series)
 	// if no job was found, try to build a job in the next series
 	if (!is_series_ready_to_clean)
 	{
-		continue;
+		// TBD: this should allow us to move to the next series
+		//continue;
+		LOG_INFO("Thread #%d: Nothing to clean in series %d", GetCurrentThreadId(), series->type);
+		result = TRUE;
+		goto cleanup;
 	}
 
 	curr_job_id = series->next_job_to_clean;
@@ -236,7 +240,11 @@ BOOL Build(Series *series)
 	// if no job was found, try to build a job in the next series
 	if (!has_found_job_in_series)
 	{
-		continue;
+		// TBD: this should allow us to move to the next series
+		//continue;
+		LOG_INFO("Thread #%d: Nothing to build in series %d", GetCurrentThreadId(), series->type);
+		result = TRUE;
+		goto cleanup;
 	}
 
 	BuildJob(series, curr_job_id);
