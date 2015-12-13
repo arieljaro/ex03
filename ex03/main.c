@@ -14,7 +14,7 @@
 #include "Worker.h"
 #include "SimpleWinAPI.h"
 
-//--------Definations--------//
+//--------Definitions--------//
 #define INPUT_PARAMETERS_NUM (9)
 #define NUM_OF_SERIES (3)
 typedef enum {
@@ -31,31 +31,16 @@ typedef enum {
 //--------Global Variables---------//
 HANDLE work_semaphore;
 
-//--------Function Declarations--------//
-/**
-* This function creates a thread by calling Win32 Api's CreateThread()
-* function, and setting some of the parameters to default value.
-*
-* parameters:
-* ----------
-* StartAddress - a pointer to the function that will be run by the thread.
-* ParameterPtr - a pointer to the parameter that will be supplied to the
-*                function run by the thread.
-* ThreadIdPtr - return argument: a pointer to a DWORD variable into which
-*               the function will write the created thread's ID.
-*
-* returns:
-* --------
-* On success, a handle to the created thread. On Failure - NULL.
-*/
-HANDLE CreateThreadSimple(LPTHREAD_START_ROUTINE StartAddress,LPVOID ParameterPtr,LPDWORD ThreadIdPtr);
+//--------Declarations--------//
 //The function gets a pointer to series typeand pwrameters of all series types: job_size, jobs num, a1,d, q and the type of the series
 //use the series input for the output:
 //initilize the fields inside: Including creating mutex, and fill job_size, jobs_num ...
 //initilize the arrays inside the series type (Jobs array)- performing required malloc 
-BOOL IntializeSeries(Series *series, int job_size, int jobs_num,int a1, int d, int q, SeriesType type);
+BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float d, float q, SeriesType type);
+
 //internal function in ItializeSeries, responsible for intilize the jobs array
-BOOL InitilizeJobsArray (Series *series,int job_size, int jobs_num);
+BOOL InitilizeJobsArray (Series *series, int job_size, int jobs_num);
+
 /* Reads the parametes and sets their values in the corresponding parameters */
 BOOL HandleParameters(
 	int argc,
@@ -65,25 +50,27 @@ BOOL HandleParameters(
 	int *job_size,
 	int *sub_seq_length,
 //	int *failure_period,
-	int *a1,
-	int *d,
-	int *q
+	float *a1,
+	float *d,
+	float *q
 );
-//$//debug function- to delete
-BOOL RunThreadTest(Series *series,int jobs_num);
+
+//$// debug function - to delete
+BOOL RunThreadTest(Series *series, int jobs_num);
+
 //--------Implementation--------//
 //--------Main--------//
 int main(int argc, char *argv[])
 {
-	ErrorCode error_code = SUCCESS;
+	ErrorCode error_code = GENERAL_FAILURE;
 	int num_of_workers;
 	int N;
 	int job_size;
 	int sub_seq_length;
 	//int failure_period;
-	int a1;
-	int d;
-	int q;
+	float a1;
+	float d;
+	float q;
 	int jobs_num;
 	Series arithmetic_series;
 	//Series geometric_series;
@@ -128,21 +115,22 @@ int main(int argc, char *argv[])
 		d,
 		q
 	);
-		jobs_num= sub_seq_length/job_size;
+	jobs_num = sub_seq_length / job_size;
+
 	//----intilize the semaphore---// 
 	work_semaphore = CreateSemaphore( 
 		NULL,	// Default security attributes 
-		(NUM_OF_SERIES*jobs_num),		// Initial Count - the number of open "jobs" for workers in the start
-		(NUM_OF_SERIES*jobs_num),		// Maximum Count -equal to the intial value
-		NULL ); // un-named 
+		(NUM_OF_SERIES * jobs_num),		// Initial Count - the number of open "jobs" for workers in the start
+		(NUM_OF_SERIES * jobs_num),		// Maximum Count -equal to the intial value
+		NULL); // un-named 
 	if (work_semaphore == NULL)
 	{
 		LOG_ERROR("Failed to create semaphore for global num of workers");
 		error_code = CREATE_SEMAPHORE_FAILED;
 		goto cleanup;
 	}
+	
 	//----intilize The series structure---//
-
 	if(!IntializeSeries(&arithmetic_series, job_size, jobs_num,a1,d,q,ARITHMETIC))
 	{
 		LOG_ERROR("Failed to intilize the arithmatic series");
@@ -189,7 +177,8 @@ int main(int argc, char *argv[])
 
 		LOG_INFO("Created thread number %d with id %d", i, threads_id[i]);
 	}
-		//Wait for all threads to end
+	
+	//Wait for all threads to end
 	wait_code = WaitForMultipleObjects(
 		num_of_workers,
 		threads_handles,
@@ -204,6 +193,7 @@ int main(int argc, char *argv[])
 		error_code = WAIT_FOR_MULTIPLE_OBJECT_FAILED;
 		goto cleanup;
 	}
+	
 	//get exit code of each thread and close the handle
 	for (i = 0; i < num_of_workers; i++)
 	{
@@ -220,9 +210,16 @@ int main(int argc, char *argv[])
 			error_code = THREAD_RUN_FAILED;
 			goto cleanup;
 		}
+		
 		CloseHandle(threads_handles[i]);
 		threads_handles[i] = NULL;
 	}
+
+	Clean(&arithmetic_series);
+
+	// If we reach this point then we set the error_code to success
+	error_code = SUCCESS;
+	
 	//----Clean up section: free all memory and wxit with correct exit code---//
 cleanup:
 	if (threads_handles != NULL)
@@ -241,19 +238,24 @@ cleanup:
 	{
 		free(threads_id);
 	}
+
 	if (work_semaphore != NULL)
 	{
 		CloseHandle(work_semaphore);
 	}
+
+	/* CR: implement a function destroy_series with all this logic */
 	//for...
 	if ((arithmetic_series.mutex_cleaning) != NULL)
 	{
 		CloseHandle(arithmetic_series.mutex_cleaning);
 	}
+	
 	if ((arithmetic_series.mutex_building) != NULL)
 	{
 		CloseHandle(arithmetic_series.mutex_building);
 	}
+	
 	if ((arithmetic_series.jobs_array) != NULL)
 	{
 		for (i = 0; i < jobs_num; i++)
@@ -262,12 +264,12 @@ cleanup:
 		}
 		free (arithmetic_series.jobs_array);
 	}
+	
 	LOG_INFO("Program End: 3 Series builder exited with exit code %d", error_code);
-return error_code;
+	return error_code;
 }
 
 //--------Functions used in main--------//
-
 /* Reads the parametes and sets their values in the corresponding parameters */
 BOOL HandleParameters(
 	int argc,
@@ -277,11 +279,13 @@ BOOL HandleParameters(
 	int *job_size,
 	int *sub_seq_length,
 //	int *failure_period,
-	int *a1,
-	int *d,
-	int *q
+	float *a1,
+	float *d,
+	float *q
 ){
 	int atoi_result;
+	double atof_result;
+
 //check for validity of number of arguments
 	if (argc < INPUT_PARAMETERS_NUM)
 	{
@@ -296,9 +300,8 @@ BOOL HandleParameters(
 	}
 
 	//Convert all strings to Integer and assign them to the right parameter.
-
 	atoi_result = atoi(argv[CMD_PARAMETER_NUM_OF_WORKERS_OFFSET]);
-	if ((errno == ERANGE) || (errno == EINVAL) || (atoi_result < 0))
+	if ((errno == ERANGE) || (errno == EINVAL) || (atoi_result <= 0))
 	{
 		LOG_ERROR("Wrong num of workers parameter");
 		return FALSE;
@@ -312,55 +315,66 @@ BOOL HandleParameters(
 		return FALSE;
 	}
 	*N= atoi_result;
+
 	atoi_result = atoi(argv[CMD_PARAMETER_JOB_SIZE_OFFSET]);
-	if ((errno == ERANGE) || (errno == EINVAL) || (atoi_result < 0))
+	if ((errno == ERANGE) || (errno == EINVAL) || (atoi_result <= 0))
 	{
 		LOG_ERROR("Wrong job size parameter");
 		return FALSE;
 	}
 	*job_size= atoi_result;
+
 	atoi_result = atoi(argv[CMD_PARAMETER_SUB_SEQ_LENGTH_OFFSET]);
-	if ((errno == ERANGE) || (errno == EINVAL) || (atoi_result < 0))
+	if ((errno == ERANGE) || (errno == EINVAL) || (atoi_result <= 0))
 	{
 		LOG_ERROR("Wrong sub sequence length parameter");
 		return FALSE;
 	}
 	*sub_seq_length= atoi_result;
-	atoi_result = atoi(argv[CMD_PARAMETER_A1_OFFSET]);
-	if ((errno == ERANGE) || (errno == EINVAL) || (atoi_result < 0))
+
+	atof_result = atof(argv[CMD_PARAMETER_A1_OFFSET]);
+	if ((errno == ERANGE) || (errno == EINVAL))
 	{
 		LOG_ERROR("Wrong First term in the series - a1 parameter");
 		return FALSE;
 	}
-	*a1= atoi_result;
-	atoi_result = atoi(argv[CMD_PARAMETER_D_OFFSET]);
-	if ((errno == ERANGE) || (errno == EINVAL) || (atoi_result < 0))
+	*a1 = (float)atof_result;
+
+	atof_result = atof(argv[CMD_PARAMETER_D_OFFSET]);
+	if ((errno == ERANGE) || (errno == EINVAL))
 	{
 		LOG_ERROR("Wrong common difference in the arithmetic series - d parameter");
 		return FALSE;
 	}
-	*d= atoi_result;
-	atoi_result = atoi(argv[CMD_PARAMETER_Q_OFFSET]);
-	if ((errno == ERANGE) || (errno == EINVAL) || (atoi_result < 0))
+	*d = (float)atof_result;
+
+	atof_result = atof(argv[CMD_PARAMETER_Q_OFFSET]);
+	if ((errno == ERANGE) || (errno == EINVAL))
 	{
 		LOG_ERROR("Wrong factor between the terms in the geometric series- q parameter");
 		return FALSE;
 	}
-	*q= atoi_result;
+	*q = (float)atof_result;
+
 	return TRUE;
 }
 
-BOOL IntializeSeries(Series *series, int job_size, int jobs_num,int a1, int d, int q, SeriesType type)
+BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float d, float q, SeriesType type)
 {
 	HANDLE mutex_cleaning = NULL;
 	HANDLE mutex_building = NULL;
-	LPCTSTR mutex_name_clean = _T( "MutexClean" );
-	LPCTSTR mutex_name_build = _T( "MutexBuild" );
+	LPCTSTR mutex_name_clean = _T("MutexClean");
+	LPCTSTR mutex_name_build = _T("MutexBuild");
+	const char *output_filename;
+	errno_t err = -1;
+	FILE *output_file = NULL;
+	
 	if (series == NULL)
 	{
 		LOG_ERROR("received NULL pointer for intilize series");
 		return FALSE;
 	}
+	
 	series->type     = type;
 	series->job_size = job_size;
 	series->jobs_num = jobs_num;
@@ -370,36 +384,58 @@ BOOL IntializeSeries(Series *series, int job_size, int jobs_num,int a1, int d, i
 	series->next_job_to_build = 0;
 	series->next_job_to_clean = 0;
 	series->cleaning_state    = NOTHING_TO_CLEAN;
-	if (InitilizeJobsArray(series, job_size, jobs_num)!= TRUE)
+	
+	// open the series output file
+	switch (series->type)
+	{
+		case ARITHMETIC:
+			output_filename = ARITHMETIC_OUTPUT_FILENAME;
+			break;
+		default:
+			LOG_ERROR("Found an invalid series type: %d", series->type);
+	}
+	err = fopen_s(&output_file, output_filename, "w");
+    if (err != 0)
+    {
+        LOG_ERROR("couldn't create output file for series %d: couldn't open the file", series->type);
+        return FALSE;
+    }
+	series->output_file = output_file;
+	
+	// Initialize Jobs Array
+	if (!InitilizeJobsArray(series, job_size, jobs_num))
 	{
 		LOG_ERROR("failed to initilize Jobs Array for the series");
 		return FALSE;
 	}
+
 	//Creating mutex// 
-	mutex_cleaning=CreateMutex( 
+	mutex_cleaning = CreateMutex( 
 		NULL,   // default security attributes 
 		FALSE,	// don't lock mutex immediately 
-		mutex_name_clean ); //"MutexClean"
+		mutex_name_clean); //"MutexClean"
 	if ( mutex_cleaning == NULL )
 	{
 		LOG_ERROR("failed to create mutex, returned with error %d",GetLastError());
 		return FALSE;
 	}
 	series->mutex_cleaning = mutex_cleaning;
-	mutex_building=CreateMutex( 
+
+	mutex_building = CreateMutex(
 		NULL,   // default security attributes 
 		FALSE,	// don't lock mutex immediately 
-		mutex_name_build ); //"MutexBuild"
+		mutex_name_build); //"MutexBuild"
 	if ( mutex_building == NULL )
 	{
 		LOG_ERROR("failed to create mutex, returned with error %d",GetLastError());
 		return FALSE;
 	}
 	series->mutex_building = mutex_building;
+
 	return TRUE;
 }
 
-BOOL InitilizeJobsArray (Series *series,int job_size, int jobs_num)
+BOOL InitilizeJobsArray (Series *series, int job_size, int jobs_num)
 {
 	int i=0;
 	series->jobs_array = (JobArray)malloc(jobs_num * sizeof(JobObject));
@@ -411,23 +447,34 @@ BOOL InitilizeJobsArray (Series *series,int job_size, int jobs_num)
 	for (i = 0; i < jobs_num; i++)
 	{
 		//The values are not valis in the start on each job place
-		series->jobs_array[i].state=EMPTY;
+		series->jobs_array[i].state = EMPTY;
+		
 		//In the start, the first index of the indexes this job is responsible of
 		//is (the index of the job inside the num_jobs array) multiply (job size)
-		series->jobs_array[i].starting_index=i*job_size; 
+		series->jobs_array[i].starting_index = i * job_size;
+
 		//allocate memory for the values, each array in size of job_size.
 		//all arrays of values_arr together are creating the sub_seq_length
-		series->jobs_array[i].values_arr=(int *)malloc(job_size * sizeof(int));
+		series->jobs_array[i].values_arr = (float *)malloc(job_size * sizeof(float));
 		if (series->jobs_array[i].values_arr == NULL)
 		{
 			LOG_ERROR("failed to malloc memory");
 			return FALSE;
 		}
+
+		//allocate memory for the values built times
+		series->jobs_array[i].built_time_arr = (SYSTEMTIME *)malloc(job_size * sizeof(SYSTEMTIME));
+		if (series->jobs_array[i].built_time_arr == NULL)
+		{
+			LOG_ERROR("failed to malloc memory");
+			return FALSE;
+		}
 	}
+
 	return TRUE;
 }
 
-BOOL RunThreadTest(Series *series)
+BOOL RunThreadTest(Series *series, int jobs_num)
 {
 	int i;
 	LOG_INFO ("a1=%d, d=%d, q= %d",series->a1,series->d,series->q);

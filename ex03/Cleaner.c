@@ -11,11 +11,47 @@
 #include "Cleaner.h"
 #include "common.h"
 
-//-----Function Declarations ----//
-
-
 //--------Implementation--------//
 BOOL CleanJob(Series *series, int job_id)
 {
-	return TRUE;
+	BOOL result = FALSE;
+	int index_within_series = 0;
+    int index_within_sector = 0;
+	JobObject *job = NULL;
+ 
+    //checking the validity of the given inputs:
+	if ((series == NULL) || (job_id >= series->jobs_num))
+    {
+        LOG_ERROR("Wrong paramters");
+        goto cleanup;
+    }
+
+	job = &(series->jobs_array[job_id]);
+
+    //printing the data of all elements in the sector to the output file
+	for (index_within_sector = 1; index_within_sector < series->job_size; index_within_sector++)
+    {
+        //calculating the element index in series:
+		index_within_series = job->starting_index + index_within_sector;
+
+		fprintf(
+			series->output_file, 
+			"Index #%d = %f, calculated by thread %ld @ %02d:%02d:%02d.%3d\n", 
+			index_within_series,
+			job->values_arr[index_within_sector],
+			job->builder_id,
+			job->built_time_arr[index_within_sector]
+		);
+
+		// clean value
+		job->values_arr[index_within_sector] = 0;
+    }
+
+	// advance the job starting index by sub_seq_length (== jobs_num * job_size)
+	job->starting_index += series->jobs_num * series->job_size;
+ 
+	result = TRUE;
+cleanup:
+    return result;
+
 }

@@ -17,6 +17,7 @@
 
 typedef enum {
 	SUCCESS = 0,
+	GENERAL_FAILURE,
 	WRONG_PARAMETERS,
 	MALLOC_FAILED,
 	CREATE_SEMAPHORE_FAILED,
@@ -25,6 +26,8 @@ typedef enum {
 	THREAD_RUN_FAILED,
 	WAIT_FOR_MULTIPLE_OBJECT_FAILED
 } ErrorCode;
+
 //--------Global Variables---------//
 extern HANDLE work_semaphore;
+
 #endif //COMMON_H

@@ -15,6 +15,10 @@
 #include "common.h"
 
 //--------Definitions--------//
+#define ARITHMETIC_OUTPUT_FILENAME "arithmetic.txt"
+#define GEOMETRIC_OUTPUT_FILENAME "geometric.txt"
+#define DIFFERENTIAL_OUTPUT_FILENAME "differential.txt"
+
 typedef enum{
 	EMPTY=0,	//the data on the JobObject is not valid and no worker is working on this Job(see JobObject defintion) 
 	BUILDING,	//there is a Worker working on building the value associated with this JobObject
@@ -32,7 +36,7 @@ typedef struct JobObject_s{
 	JobState state;
 	DWORD builder_id;	 //Thread Is of the builder which built this values in the array
 	unsigned int starting_index;
-	int *values_arr;	 //The values of the series
+	float *values_arr;	 //The values of the series
 						 //Each job contaning diffrent range in size of job_size,
 						 //where the relevant terms will be stored
 	SYSTEMTIME *built_time_arr;
@@ -43,7 +47,7 @@ typedef JobObject *JobArray;
 typedef enum {
 	ARITHMETIC = 0,
 //	GEOMETRIC,
-//	DIFFERENCE,
+//	DIFFERENTIAL,
 	SERIES_TYPES_COUNT
 } SeriesType;
 
@@ -55,14 +59,18 @@ typedef struct Series_s{
 	unsigned int next_job_to_clean; // The next job number which a cleaner has to clean.
 	HANDLE mutex_building;			// A handle to the mutex for accessing buildng related indicators
 	unsigned int next_job_to_build; // Next job number which a builder has to built 
+	FILE *output_file;
 	int job_size;
 	int jobs_num;
-	int a1;
-	int d;
-	int q;
+	float a1;
+	float d;
+	float q;
 } Series;
 
 //--------Function Declarations--------//
-BOOL RunThread (Series *series); 
+BOOL RunThread (Series *series);
+
+// TBD: remove this - needed for phase 1 only
+BOOL Clean (Series *series);
 
 #endif //WORKER_H
