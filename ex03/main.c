@@ -16,6 +16,7 @@
 
 //--------Definations--------//
 #define INPUT_PARAMETERS_NUM (9)
+#define NUM_OF_SERIES (3)
 typedef enum {
 	CMD_PARAMETER_NUM_OF_WORKERS_OFFSET = 1,
 	CMD_PARAMETER_N_OFFSET,
@@ -48,11 +49,13 @@ HANDLE work_semaphore;
 * On success, a handle to the created thread. On Failure - NULL.
 */
 HANDLE CreateThreadSimple(LPTHREAD_START_ROUTINE StartAddress,LPVOID ParameterPtr,LPDWORD ThreadIdPtr);
-//This function Initialize series type, 
-//initilize the fields inside: Including creating mutex, and fill job_size and jobs_num
-//initilize the arrays inside the series type (Jobs array)
-//The function gets a pointer to series type and fill its field, including malloc fo required arrays
-BOOL IntializeSeries(Series *series, int job_size, int jobs_num);
+//The function gets a pointer to series typeand pwrameters of all series types: job_size, jobs num, a1,d, q and the type of the series
+//use the series input for the output:
+//initilize the fields inside: Including creating mutex, and fill job_size, jobs_num ...
+//initilize the arrays inside the series type (Jobs array)- performing required malloc 
+BOOL IntializeSeries(Series *series, int job_size, int jobs_num,int a1, int d, int q, SeriesType type);
+//internal function in ItializeSeries, responsible for intilize the jobs array
+BOOL InitilizeJobsArray (Series *series,int job_size, int jobs_num);
 /* Reads the parametes and sets their values in the corresponding parameters */
 BOOL HandleParameters(
 	int argc,
@@ -66,6 +69,8 @@ BOOL HandleParameters(
 	int *d,
 	int *q
 );
+//$//debug function- to delete
+BOOL RunThreadTest(Series *series,int jobs_num);
 //--------Implementation--------//
 //--------Main--------//
 int main(int argc, char *argv[])
@@ -86,10 +91,10 @@ int main(int argc, char *argv[])
 	int i;
 	HANDLE *threads_handles = NULL; //an array to hold the handles, the size isn't known during compilation time
 	DWORD *threads_id = NULL;
-	//DWORD exitcode;
-	//DWORD wait_code;
+	DWORD exitcode;
+	DWORD wait_code;
 
-	//checking parameters and print
+	//----checking parameters and print---//
 	if (!HandleParameters(
 		argc,
 		argv,
@@ -123,15 +128,30 @@ int main(int argc, char *argv[])
 		d,
 		q
 	);
-	jobs_num= sub_seq_length/job_size;
-	if(!IntializeSeries(&arithmetic_series, job_size, jobs_num))
+		jobs_num= sub_seq_length/job_size;
+	//----intilize the semaphore---// 
+	work_semaphore = CreateSemaphore( 
+		NULL,	// Default security attributes 
+		(NUM_OF_SERIES*jobs_num),		// Initial Count - the number of open "jobs" for workers in the start
+		(NUM_OF_SERIES*jobs_num),		// Maximum Count -equal to the intial value
+		NULL ); // un-named 
+	if (work_semaphore == NULL)
+	{
+		LOG_ERROR("Failed to create semaphore for global num of workers");
+		error_code = CREATE_SEMAPHORE_FAILED;
+		goto cleanup;
+	}
+	//----intilize The series structure---//
+
+	if(!IntializeSeries(&arithmetic_series, job_size, jobs_num,a1,d,q,ARITHMETIC))
 	{
 		LOG_ERROR("Failed to intilize the arithmatic series");
 		error_code = INTIALIZE_SERIES_FAILED;
 		goto cleanup;
 	}
 
-		//creating an array of handles in num_of_workerss size
+	//----Starting threads workers---//
+	//creating an array of handles in num_of_workers size
 	threads_handles = (HANDLE *)malloc(num_of_workers * sizeof(HANDLE));
 	if (threads_handles == NULL)
 	{
@@ -149,16 +169,17 @@ int main(int argc, char *argv[])
 		goto cleanup;
 	}
 
-	//Creating for each test, thread to run the test.
+	//Creating the threads, which are the "worker" threads
 	for (i=0; i < num_of_workers; i++)
 	{
 		threads_handles[i] = CreateThreadSimple(
-			(LPTHREAD_START_ROUTINE)RunThread,
+//			(LPTHREAD_START_ROUTINE)RunThread,
+			(LPTHREAD_START_ROUTINE)RunThreadTest,
 			&arithmetic_series,
 			(LPDWORD)&(threads_id[i])
 		);
 		
-		//cheack the creation of thread succeedded
+		//check if the creation of thread succeedded
 		if (threads_handles[i] == NULL)
 		{
 			LOG_ERROR("failed to create thread");
@@ -168,9 +189,80 @@ int main(int argc, char *argv[])
 
 		LOG_INFO("Created thread number %d with id %d", i, threads_id[i]);
 	}
+		//Wait for all threads to end
+	wait_code = WaitForMultipleObjects(
+		num_of_workers,
+		threads_handles,
+		TRUE,       // wait until all threads finish 
+		INFINITE
+	);
 
+	//----All threads workers finished their jobs, get errors---//
+	if (wait_code != WAIT_OBJECT_0)
+	{
+		LOG_ERROR("Unexpected output value of 0x%x from WaitForMultipleObject()", wait_code);
+		error_code = WAIT_FOR_MULTIPLE_OBJECT_FAILED;
+		goto cleanup;
+	}
+	//get exit code of each thread and close the handle
+	for (i = 0; i < num_of_workers; i++)
+	{
+		if (!GetExitCodeThread(threads_handles[i], &exitcode))
+		{
+			LOG_ERROR("Failed to get thread #%d exit code", i);
+			error_code = THREAD_RUN_FAILED;
+			goto cleanup;
+		}
+		LOG_INFO("Thread number %d returned with exit code %d\n", i, exitcode);
+		if(exitcode != TRUE)
+		{
+			LOG_ERROR("Thread number %d failed", i);
+			error_code = THREAD_RUN_FAILED;
+			goto cleanup;
+		}
+		CloseHandle(threads_handles[i]);
+		threads_handles[i] = NULL;
+	}
+	//----Clean up section: free all memory and wxit with correct exit code---//
+cleanup:
+	if (threads_handles != NULL)
+	{
+		for (i = 0; i < num_of_workers; i++)
+		{
+			if (threads_handles[i] != NULL)
+			{
+				CloseHandle(threads_handles[i]);
+			}
+		}
+		free(threads_handles);
+	}
 
-	cleanup:
+	if (threads_id != NULL)
+	{
+		free(threads_id);
+	}
+	if (work_semaphore != NULL)
+	{
+		CloseHandle(work_semaphore);
+	}
+	//for...
+	if ((arithmetic_series.mutex_cleaning) != NULL)
+	{
+		CloseHandle(arithmetic_series.mutex_cleaning);
+	}
+	if ((arithmetic_series.mutex_building) != NULL)
+	{
+		CloseHandle(arithmetic_series.mutex_building);
+	}
+	if ((arithmetic_series.jobs_array) != NULL)
+	{
+		for (i = 0; i < jobs_num; i++)
+		{
+			free (arithmetic_series.jobs_array[i].values_arr);
+		}
+		free (arithmetic_series.jobs_array);
+	}
+	LOG_INFO("Program End: 3 Series builder exited with exit code %d", error_code);
 return error_code;
 }
 
@@ -258,9 +350,90 @@ BOOL HandleParameters(
 	return TRUE;
 }
 
-BOOL IntializeSeries(Series *series, int job_size, int jobs_num)
+BOOL IntializeSeries(Series *series, int job_size, int jobs_num,int a1, int d, int q, SeriesType type)
 {
-	series->job_size=job_size;
+	HANDLE mutex_cleaning = NULL;
+	HANDLE mutex_building = NULL;
+	LPCTSTR mutex_name_clean = _T( "MutexClean" );
+	LPCTSTR mutex_name_build = _T( "MutexBuild" );
+	if (series == NULL)
+	{
+		LOG_ERROR("received NULL pointer for intilize series");
+		return FALSE;
+	}
+	series->type     = type;
+	series->job_size = job_size;
 	series->jobs_num = jobs_num;
+	series->a1       = a1;
+	series->d        = d;
+	series->q        = q;
+	series->next_job_to_build = 0;
+	series->next_job_to_clean = 0;
+	series->cleaning_state    = NOTHING_TO_CLEAN;
+	if (InitilizeJobsArray(series, job_size, jobs_num)!= TRUE)
+	{
+		LOG_ERROR("failed to initilize Jobs Array for the series");
+		return FALSE;
+	}
+	//Creating mutex// 
+	mutex_cleaning=CreateMutex( 
+		NULL,   // default security attributes 
+		FALSE,	// don't lock mutex immediately 
+		mutex_name_clean ); //"MutexClean"
+	if ( mutex_cleaning == NULL )
+	{
+		LOG_ERROR("failed to create mutex, returned with error %d",GetLastError());
+		return FALSE;
+	}
+	series->mutex_cleaning = mutex_cleaning;
+	mutex_building=CreateMutex( 
+		NULL,   // default security attributes 
+		FALSE,	// don't lock mutex immediately 
+		mutex_name_build ); //"MutexBuild"
+	if ( mutex_building == NULL )
+	{
+		LOG_ERROR("failed to create mutex, returned with error %d",GetLastError());
+		return FALSE;
+	}
+	series->mutex_building = mutex_building;
+	return TRUE;
+}
+
+BOOL InitilizeJobsArray (Series *series,int job_size, int jobs_num)
+{
+	int i=0;
+	series->jobs_array = (JobArray)malloc(jobs_num * sizeof(JobObject));
+	if (series->jobs_array == NULL)
+	{
+		LOG_ERROR("failed to malloc memory");
+		return FALSE;
+	}
+	for (i = 0; i < jobs_num; i++)
+	{
+		//The values are not valis in the start on each job place
+		series->jobs_array[i].state=EMPTY;
+		//In the start, the first index of the indexes this job is responsible of
+		//is (the index of the job inside the num_jobs array) multiply (job size)
+		series->jobs_array[i].starting_index=i*job_size; 
+		//allocate memory for the values, each array in size of job_size.
+		//all arrays of values_arr together are creating the sub_seq_length
+		series->jobs_array[i].values_arr=(int *)malloc(job_size * sizeof(int));
+		if (series->jobs_array[i].values_arr == NULL)
+		{
+			LOG_ERROR("failed to malloc memory");
+			return FALSE;
+		}
+	}
+	return TRUE;
+}
+
+BOOL RunThreadTest(Series *series)
+{
+	int i;
+	LOG_INFO ("a1=%d, d=%d, q= %d",series->a1,series->d,series->q);
+	for (i = 0; i < series->jobs_num; i++)
+	{
+	LOG_INFO ("the starting index of this job is %d",series->jobs_array[i].starting_index);
+	}
 	return TRUE;
 }

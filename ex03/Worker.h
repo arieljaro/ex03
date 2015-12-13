@@ -33,6 +33,8 @@ typedef struct JobObject_s{
 	DWORD builder_id;	 //Thread Is of the builder which built this values in the array
 	unsigned int starting_index;
 	int *values_arr;	 //The values of the series
+						 //Each job contaning diffrent range in size of job_size,
+						 //where the relevant terms will be stored
 	SYSTEMTIME *built_time_arr;
 } JobObject;
 

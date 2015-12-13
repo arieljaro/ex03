@@ -16,7 +16,7 @@
 #include "common.h"
 
 //--------Global Variables---------//
-extern HANDLE work_semaphore;
+HANDLE work_semaphore;
 
 //-----Function Declarations ----//
 BOOL Clean(Series *series);
