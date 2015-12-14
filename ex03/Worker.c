@@ -32,7 +32,9 @@ BOOL RunThread (Series *series)
 	BOOL result = FALSE;
 
 	LOG_INFO("Thread #%d started running", GetCurrentThreadId());
-
+	//while we didn't get to the end of the series in the cleaning job
+	while (series->next_job_to_clean < series->jobs_num)
+	{
 	// Wait for work semaphore until there is work to do
 	dwWaitResult = WaitForSingleObject(work_semaphore, INFINITE);
 	if (dwWaitResult != WAIT_OBJECT_0) 
@@ -67,7 +69,7 @@ BOOL RunThread (Series *series)
 		LOG_ERROR("Thread #%d: Failed to release the work semaphore", GetCurrentThreadId());
 		goto cleanup;
 	}
-
+	}
 	result = TRUE;
 
 cleanup:
