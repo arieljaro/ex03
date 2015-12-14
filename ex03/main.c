@@ -36,7 +36,7 @@ HANDLE work_semaphore;
 //use the series input for the output:
 //initilize the fields inside: Including creating mutex, and fill job_size, jobs_num ...
 //initilize the arrays inside the series type (Jobs array)- performing required malloc 
-BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float d, float q, SeriesType type);
+BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float d, float q,int N, SeriesType type);
 
 //internal function in ItializeSeries, responsible for intilize the jobs array
 BOOL InitilizeJobsArray (Series *series, int job_size, int jobs_num);
@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
 	}
 	
 	//----intilize The series structure---//
-	if(!IntializeSeries(&arithmetic_series, job_size, jobs_num, a1, d, q, ARITHMETIC_SERIES))
+	if(!IntializeSeries(&arithmetic_series, job_size, jobs_num, a1, d, q, N, ARITHMETIC_SERIES))
 	{
 		LOG_ERROR("Failed to intilize the arithmatic series");
 		error_code = INTIALIZE_SERIES_FAILED;
@@ -363,7 +363,7 @@ BOOL HandleParameters(
 	return TRUE;
 }
 
-BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float d, float q, SeriesType type)
+BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float d, float q,int N, SeriesType type)
 {
 	HANDLE mutex_cleaning = NULL;
 	HANDLE mutex_building = NULL;
@@ -385,6 +385,7 @@ BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float
 	series->a1       = a1;
 	series->d        = d;
 	series->q        = q;
+	series->N        = N;
 	series->next_job_to_build = 0;
 	series->next_job_to_clean = 0;
 	series->cleaning_state    = NOTHING_TO_CLEAN;

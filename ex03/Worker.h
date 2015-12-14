@@ -65,6 +65,7 @@ typedef struct Series_s{
 	float a1;
 	float d;
 	float q;
+	int N;
 } Series;
 
 //--------Function Declarations--------//

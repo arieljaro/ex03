@@ -159,7 +159,7 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series)
 		}
 
 		//-----------Building Mutex Critical Section------------//
-		if (series->next_job_to_build == -1)
+		if (series->next_job_to_build == -1 && (series->jobs_array[curr_job_id].starting_index<=series->N))//avoiding calcultion of larger than N indexes
 		{
 			series->next_job_to_build = curr_job_id;
 		}
@@ -179,6 +179,11 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series)
 
 		// increment the curr_job_id to try cleaning the next job (if DONE)
 		curr_job_id++;
+		if (curr_job_id=series->jobs_num) //TBD:cyclic??
+		{
+			break; //if we were on the last job to clean->break
+		}
+		curr_job_id=curr_job_id%(series->jobs_num);
 	}
 		
 	// Now change the cleaning state to NOTHING_TO_CLEAN
@@ -254,8 +259,8 @@ BOOL Build(Series *series)
 		series->next_job_to_build = -1;
 		j = curr_job_id + 1;
 		for (k = 0; k < series->jobs_num; k++)
-		{
-			if (series->jobs_array[j].state == EMPTY)
+		{//(series->jobs_array[j].starting_index<=series->N) we don't want to build indexes larger than N
+			if (series->jobs_array[j].state == EMPTY && (series->jobs_array[j].starting_index<=series->N))
 			{
 				series->next_job_to_build = j;
 				LOG_INFO("Thread #%d: set next_job_to_build to %d", GetCurrentThreadId(), j);
