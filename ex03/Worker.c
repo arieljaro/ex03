@@ -188,6 +188,7 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series)
 	}
 
 	//-----------Cleaning Mutex Critical Section------------//
+	series->next_job_to_clean = curr_job_id;
 	series->cleaning_state = NOTHING_TO_CLEAN;
 	//-------End Of Cleaning Mutex Critical Section---------//
 
