@@ -456,7 +456,7 @@ BOOL InitilizeJobsArray (Series *series, int job_size, int jobs_num)
 		
 		//In the start, the first index of the indexes this job is responsible of
 		//is (the index of the job inside the num_jobs array) multiply (job size)
-		series->jobs_array[i].starting_index = i * job_size;
+		series->jobs_array[i].starting_index = i * job_size + 1;
 
 		//allocate memory for the values, each array in size of job_size.
 		//all arrays of values_arr together are creating the sub_seq_length
