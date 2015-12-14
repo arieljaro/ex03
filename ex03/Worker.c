@@ -159,11 +159,12 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series)
 		}
 
 		//-----------Building Mutex Critical Section------------//
-		if (series->next_job_to_build == -1 && (series->jobs_array[curr_job_id].starting_index<=series->N))//avoiding calcultion of larger than N indexes
+		if (series->next_job_to_build == -1 && ((curr_job_id+series->jobs_num)*(series->job_size)<=series->N))//avoiding calcultion of larger than N indexes
 		{
 			series->next_job_to_build = curr_job_id;
 		}
 		//-------End Of Building Mutex Critical Section---------//
+		LOG_INFO("Thread #%d:finished to clean and set next_job_to_build to %d", GetCurrentThreadId(), curr_job_id);
 
 		// release the building mutex
 		retval = ReleaseMutex(series->mutex_building);
@@ -183,7 +184,7 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series)
 		{
 			break; //if we were on the last job to clean->break
 		}
-		curr_job_id=curr_job_id%(series->jobs_num);
+		//curr_job_id=curr_job_id%(series->jobs_num);
 	}
 		
 	// Now change the cleaning state to NOTHING_TO_CLEAN
@@ -198,7 +199,7 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series)
 	series->next_job_to_clean = curr_job_id;
 	series->cleaning_state = NOTHING_TO_CLEAN;
 	//-------End Of Cleaning Mutex Critical Section---------//
-
+	
 	// release the cleaning mutex
 	retval = ReleaseMutex(series->mutex_cleaning);
 	if (!retval)
@@ -259,14 +260,15 @@ BOOL Build(Series *series)
 		series->next_job_to_build = -1;
 		j = curr_job_id + 1;
 		for (k = 0; k < series->jobs_num; k++)
-		{//(series->jobs_array[j].starting_index<=series->N) we don't want to build indexes larger than N
-			if (series->jobs_array[j].state == EMPTY && (series->jobs_array[j].starting_index<=series->N))
+		{//(series->jobs_array[j].starting_index<=series->N) we don't want to build indexes larger than N. starting index should be updated with mutex??
+			//another solution: use j*job_size+1
+			if (series->jobs_array[j%(series->jobs_num)].state == EMPTY && ((j*(series->job_size)+1)<=series->N))
 			{
 				series->next_job_to_build = j;
 				LOG_INFO("Thread #%d: set next_job_to_build to %d", GetCurrentThreadId(), j);
 				break;
 			}
-			j = (j+1) % series->jobs_num;
+			j = (j+1);
 		}
 	}
 	//-------End Of Building Mutex Critical Section---------//
