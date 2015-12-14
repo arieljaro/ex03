@@ -179,7 +179,7 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series)
 
 		// increment the curr_job_id to try cleaning the next job (if DONE)
 		curr_job_id++;
-		if (curr_job_id=series->jobs_num) //TBD:cyclic??
+		if (curr_job_id == series->jobs_num) //TBD:cyclic??
 		{
 			break; //if we were on the last job to clean->break
 		}
