@@ -40,6 +40,8 @@ BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float
 //internal function in ItializeSeries, responsible for intilize the jobs array
 BOOL InitilizeJobsArray (Series *series, int job_size, int jobs_num);
 
+//Free all memory allocated for the series and close handles such as :mutex, file handle
+BOOL destroy_series(Series *series_array, BOOL *were_series_initialized,int jobs_num );
 /* Reads the parametes and sets their values in the corresponding parameters */
 BOOL HandleParameters(
 	int argc,
@@ -73,19 +75,22 @@ int main(int argc, char *argv[])
 	int jobs_num;
 	// TODO: should be volatile??
 	Series arithmetic_series;
-	//Series geometric_series;
-	//Series diffrential_between_arith_geom;
+	Series series_array[SERIES_TYPES_COUNT];
 	int i;
+	int j;
 	HANDLE *threads_handles = NULL; //an array to hold the handles, the size isn't known during compilation time
 	DWORD *threads_id = NULL;
 	DWORD exitcode;
 	DWORD wait_code;
-	BOOL were_series_initialized = FALSE;
+	BOOL were_series_initialized[SERIES_TYPES_COUNT];
 	DWORD start_tick = 0;
 	DWORD end_tick = 0;
 
 	start_tick = GetTickCount();
-
+	for (i=0; i<SERIES_TYPES_COUNT ; i++)
+	{
+		were_series_initialized[i]=FALSE;
+	}
 	//----checking parameters and print---//
 	if (!HandleParameters(
 		argc,
@@ -136,13 +141,27 @@ int main(int argc, char *argv[])
 	}
 	
 	//----intilize The series structure---//
-	if(!IntializeSeries(&arithmetic_series, job_size, jobs_num, a1, d, q, N, ARITHMETIC_SERIES))
+	if(!IntializeSeries(&series_array[ARITHMETIC_SERIES], job_size, jobs_num, a1, d, q, N, ARITHMETIC_SERIES))
 	{
 		LOG_ERROR("Failed to intilize the arithmatic series");
 		error_code = INTIALIZE_SERIES_FAILED;
 		goto cleanup;
 	}
-	were_series_initialized = TRUE;
+	were_series_initialized[ARITHMETIC_SERIES] = TRUE;
+	if(!IntializeSeries(&series_array[GEOMETRIC_SERIES], job_size, jobs_num, a1, d, q, N, GEOMETRIC_SERIES))
+	{
+		LOG_ERROR("Failed to intilize the geometric series");
+		error_code = INTIALIZE_SERIES_FAILED;
+		goto cleanup;
+	}
+	were_series_initialized[GEOMETRIC_SERIES] = TRUE;
+	if(!IntializeSeries(&series_array[DIFFERENTIAL_SERIES], job_size, jobs_num, a1, d, q, N, DIFFERENTIAL_SERIES))
+	{
+		LOG_ERROR("Failed to intilize the diffrential between series series");
+		error_code = INTIALIZE_SERIES_FAILED;
+		goto cleanup;
+	}
+	were_series_initialized[DIFFERENTIAL_SERIES] = TRUE;
 
 	//----Starting threads workers---//
 	//creating an array of handles in num_of_workers size
@@ -168,7 +187,7 @@ int main(int argc, char *argv[])
 	{
 		threads_handles[i] = CreateThreadSimple(
 			(LPTHREAD_START_ROUTINE)RunThread,
-			&arithmetic_series,
+			&series_array,
 			(LPDWORD)&(threads_id[i])
 		);
 		
@@ -220,7 +239,7 @@ int main(int argc, char *argv[])
 		threads_handles[i] = NULL;
 	}
 
-	//Clean(&arithmetic_series);
+	//Clean(&series_array);
 
 	// If we reach this point then we set the error_code to success
 	error_code = SUCCESS;
@@ -249,35 +268,7 @@ cleanup:
 		CloseHandle(work_semaphore);
 	}
 
-	/* CR: implement a function destroy_series with all this logic */
-	//for...
-	if (were_series_initialized)
-	{
-		if ((arithmetic_series.mutex_cleaning) != NULL)
-		{
-			CloseHandle(arithmetic_series.mutex_cleaning);
-		}
-		
-		if ((arithmetic_series.mutex_building) != NULL)
-		{
-			CloseHandle(arithmetic_series.mutex_building);
-		}
-		
-		if ((arithmetic_series.jobs_array) != NULL)
-		{
-			for (i = 0; i < jobs_num; i++)
-			{
-				free (arithmetic_series.jobs_array[i].values_arr);
-			}
-			free (arithmetic_series.jobs_array);
-		}
-
-		if (arithmetic_series.output_file != NULL)
-		{
-			fclose(arithmetic_series.output_file);
-		}
-	}
-
+	destroy_series(series_array, were_series_initialized, jobs_num);
 	end_tick = GetTickCount();
 	LOG_INFO("Program End: 3 Series builder exited with exit code %d (total running time = %f)", error_code, (end_tick - start_tick) / 1000.0);
 	return error_code;
@@ -407,6 +398,12 @@ BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float
 		case ARITHMETIC_SERIES:
 			output_filename = ARITHMETIC_OUTPUT_FILENAME;
 			break;
+		case GEOMETRIC_SERIES:
+			output_filename = GEOMETRIC_OUTPUT_FILENAME;
+			break;
+		case DIFFERENTIAL_SERIES:
+			output_filename = DIFFERENTIAL_OUTPUT_FILENAME;
+			break;
 		default:
 			LOG_ERROR("Found an invalid series type: %d", series->type);
 	}
@@ -487,5 +484,40 @@ BOOL InitilizeJobsArray (Series *series, int job_size, int jobs_num)
 		}
 	}
 
+	return TRUE;
+}
+
+BOOL destroy_series(Series *series_array, BOOL *were_series_initialized,int jobs_num )
+{
+	int j,i;
+	for(j=0; j< SERIES_TYPES_COUNT; j++)
+	{
+		if (were_series_initialized[j])
+		{
+			if ((series_array[j].mutex_cleaning) != NULL)
+			{
+				CloseHandle(series_array[j].mutex_cleaning);
+			}
+		
+			if ((series_array[j].mutex_building) != NULL)
+			{
+				CloseHandle(series_array[j].mutex_building);
+			}
+		
+			if ((series_array[j].jobs_array) != NULL)
+			{
+				for (i = 0; i < jobs_num; i++)
+				{
+					free (series_array[j].jobs_array[i].values_arr);
+				}
+				free (series_array[j].jobs_array);
+			}
+
+			if (series_array[j].output_file != NULL)
+			{
+				fclose(series_array[j].output_file);
+			}
+		}
+	}
 	return TRUE;
 }

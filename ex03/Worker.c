@@ -167,7 +167,7 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series, BOOL *is_cleaning_completed
 		CleanJob(series, curr_job_id);
 		// advance the job starting index by sub_seq_length (== jobs_num * job_size)
 		series->jobs_array[curr_job_id].starting_index += series->jobs_num * series->job_size;
-		if (series->jobs_array[curr_job_id].starting_index >= series->N)
+		if (series->jobs_array[curr_job_id].starting_index >= series->N) //why equal????
 		{
 			series->jobs_array[curr_job_id].state = COMPLETED;
 			// *****************************************************************************************************************
@@ -209,7 +209,7 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series, BOOL *is_cleaning_completed
 			goto cleanup;
 		}
 
-		if (should_release_work_semaphore)
+		if (should_release_work_semaphore) ///what is the flow it remain false??? 
 		{
 			// release work semaphore to start a cleaner
 			retval = ReleaseSemaphore(
@@ -240,7 +240,7 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series, BOOL *is_cleaning_completed
 
 	//-----------Cleaning Mutex Critical Section------------//
 	series->next_job_to_clean = curr_job_id;
-	if (series->jobs_array[curr_job_id].state == COMPLETED)
+	if (series->jobs_array[curr_job_id].state == COMPLETED)//why if the cur job is is completed we complet all??? 
 	{
 		series->cleaning_state = CLEANING_COMPLETED;
 		*is_cleaning_completed = TRUE;
