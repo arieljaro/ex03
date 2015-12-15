@@ -34,7 +34,7 @@ BOOL BuildJob(Series *series, int job_id)
 		{
 			current_job->values_arr[i] = a1 + d * (current_job->starting_index + i-1);
 			GetLocalTime(&current_job->built_time_arr[i]);
-			LOG_INFO(
+			LOG_DEBUG(
 				"Index #%d = %f, calculated by thread %ld @ %02d:%02d:%02d.%3d\n", 
 				current_job->starting_index + i ,
 				current_job->values_arr[i],

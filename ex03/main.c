@@ -35,7 +35,7 @@ volatile HANDLE work_semaphore = NULL;
 //use the series input for the output:
 //initilize the fields inside: Including creating mutex, and fill job_size, jobs_num ...
 //initilize the arrays inside the series type (Jobs array)- performing required malloc 
-BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float d, float q,int N, SeriesType type);
+BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float d, float q, int N, unsigned int semaphore_size, SeriesType type);
 
 //internal function in ItializeSeries, responsible for intilize the jobs array
 BOOL InitilizeJobsArray (Series *series, int job_size, int jobs_num);
@@ -76,6 +76,7 @@ int main(int argc, char *argv[])
 	//Series geometric_series;
 	//Series diffrential_between_arith_geom;
 	int i;
+	unsigned int semaphore_size;
 	HANDLE *threads_handles = NULL; //an array to hold the handles, the size isn't known during compilation time
 	DWORD *threads_id = NULL;
 	DWORD exitcode;
@@ -123,10 +124,11 @@ int main(int argc, char *argv[])
 	jobs_num = sub_seq_length / job_size;
 
 	//----intilize the semaphore---// 
+	semaphore_size = SERIES_TYPES_COUNT * jobs_num;
 	work_semaphore = CreateSemaphore( 
-		NULL,	// Default security attributes 
-		(SERIES_TYPES_COUNT * jobs_num),		// Initial Count - the number of open "jobs" for workers in the start
-		(SERIES_TYPES_COUNT * jobs_num),		// Maximum Count -equal to the intial value
+		NULL,				// Default security attributes 
+		semaphore_size,		// Initial Count - the number of open "jobs" for workers in the start
+		semaphore_size,		// Maximum Count -equal to the intial value
 		NULL); // un-named 
 	if (work_semaphore == NULL)
 	{
@@ -136,7 +138,7 @@ int main(int argc, char *argv[])
 	}
 	
 	//----intilize The series structure---//
-	if(!IntializeSeries(&arithmetic_series, job_size, jobs_num, a1, d, q, N, ARITHMETIC_SERIES))
+	if(!IntializeSeries(&arithmetic_series, job_size, jobs_num, a1, d, q, N, semaphore_size, ARITHMETIC_SERIES))
 	{
 		LOG_ERROR("Failed to intilize the arithmatic series");
 		error_code = INTIALIZE_SERIES_FAILED;
@@ -208,7 +210,7 @@ int main(int argc, char *argv[])
 			error_code = THREAD_RUN_FAILED;
 			goto cleanup;
 		}
-		LOG_INFO("Thread number %d returned with exit code %d\n", i, exitcode);
+		LOG_INFO("Thread number %d returned with exit code %d (1=success)\n", i, exitcode);
 		if(exitcode != TRUE)
 		{
 			LOG_ERROR("Thread number %d failed", i);
@@ -373,7 +375,7 @@ BOOL HandleParameters(
 	return TRUE;
 }
 
-BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float d, float q,int N, SeriesType type)
+BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float d, float q, int N, unsigned int semaphore_size, SeriesType type)
 {
 	HANDLE mutex_cleaning = NULL;
 	HANDLE mutex_building = NULL;
@@ -389,17 +391,18 @@ BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float
 		return FALSE;
 	}
 	
-	series->type     = type;
-	series->job_size = job_size;
-	series->jobs_num = jobs_num;
-	series->a1       = a1;
-	series->d        = d;
-	series->q        = q;
-	series->N        = N;
+	series->type			  = type;
+	series->job_size		  = job_size;
+	series->jobs_num		  = jobs_num;
+	series->a1				  = a1;
+	series->d				  = d;
+	series->q				  = q;
+	series->N				  = N;
+	series->semaphore_size	  = semaphore_size;	
 	series->next_job_to_build = 0;
 	series->next_job_to_clean = 0;
 	series->cleaning_state    = NOTHING_TO_CLEAN;
-	series->output_file = NULL;
+	series->output_file		  = NULL;
 	
 	// open the series output file
 	switch (series->type)

@@ -68,6 +68,7 @@ typedef struct Series_s{
 	float d;
 	float q;
 	unsigned int N;
+	unsigned int semaphore_size;
 } Series;
 
 //--------Function Declarations--------//
