@@ -452,7 +452,7 @@ BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float
 BOOL InitilizeJobsArray (Series *series, int job_size, int jobs_num)
 {
 	int i=0;
-	BOOL result;
+	BOOL result = TRUE;
 	series->jobs_array = (JobArray)malloc(jobs_num * sizeof(JobObject));
 	if (series->jobs_array == NULL)
 	{
@@ -491,7 +491,7 @@ BOOL InitilizeJobsArray (Series *series, int job_size, int jobs_num)
 	result = TRUE;
 cleanup:
 	//if we failed to malloc memory somewhere in this function, result is FALSE and we need to free the memory already allocated
-	if (result = FALSE)
+	if (result == FALSE)
 	{
 		if(series->jobs_array != NULL)
 		{
