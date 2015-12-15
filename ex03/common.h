@@ -27,7 +27,4 @@ typedef enum {
 	WAIT_FOR_MULTIPLE_OBJECT_FAILED
 } ErrorCode;
 
-//--------Global Variables---------//
-extern HANDLE work_semaphore;
-
 #endif //COMMON_H

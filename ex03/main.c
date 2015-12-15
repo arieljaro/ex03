@@ -15,7 +15,6 @@
 #include "SimpleWinAPI.h"
 
 //--------Definitions--------//
-#define NUM_OF_SERIES (3)
 typedef enum {
 	CMD_PARAMETER_NUM_OF_WORKERS_OFFSET = 1,
 	CMD_PARAMETER_N_OFFSET,
@@ -29,7 +28,7 @@ typedef enum {
 } CmdParameter;
 
 //--------Global Variables---------//
-HANDLE work_semaphore;
+volatile HANDLE work_semaphore = NULL;
 
 //--------Declarations--------//
 //The function gets a pointer to series typeand pwrameters of all series types: job_size, jobs num, a1,d, q and the type of the series
@@ -72,6 +71,7 @@ int main(int argc, char *argv[])
 	float d;
 	float q;
 	int jobs_num;
+	// TODO: should be volatile??
 	Series arithmetic_series;
 	//Series geometric_series;
 	//Series diffrential_between_arith_geom;
@@ -80,6 +80,11 @@ int main(int argc, char *argv[])
 	DWORD *threads_id = NULL;
 	DWORD exitcode;
 	DWORD wait_code;
+	BOOL were_series_initialized = FALSE;
+	DWORD start_tick = 0;
+	DWORD end_tick = 0;
+
+	start_tick = GetTickCount();
 
 	//----checking parameters and print---//
 	if (!HandleParameters(
@@ -120,8 +125,8 @@ int main(int argc, char *argv[])
 	//----intilize the semaphore---// 
 	work_semaphore = CreateSemaphore( 
 		NULL,	// Default security attributes 
-		(NUM_OF_SERIES * jobs_num),		// Initial Count - the number of open "jobs" for workers in the start
-		(NUM_OF_SERIES * jobs_num),		// Maximum Count -equal to the intial value
+		(SERIES_TYPES_COUNT * jobs_num),		// Initial Count - the number of open "jobs" for workers in the start
+		(SERIES_TYPES_COUNT * jobs_num),		// Maximum Count -equal to the intial value
 		NULL); // un-named 
 	if (work_semaphore == NULL)
 	{
@@ -137,6 +142,7 @@ int main(int argc, char *argv[])
 		error_code = INTIALIZE_SERIES_FAILED;
 		goto cleanup;
 	}
+	were_series_initialized = TRUE;
 
 	//----Starting threads workers---//
 	//creating an array of handles in num_of_workers size
@@ -245,31 +251,35 @@ cleanup:
 
 	/* CR: implement a function destroy_series with all this logic */
 	//for...
-	if ((arithmetic_series.mutex_cleaning) != NULL)
+	if (were_series_initialized)
 	{
-		CloseHandle(arithmetic_series.mutex_cleaning);
-	}
-	
-	if ((arithmetic_series.mutex_building) != NULL)
-	{
-		CloseHandle(arithmetic_series.mutex_building);
-	}
-	
-	if ((arithmetic_series.jobs_array) != NULL)
-	{
-		for (i = 0; i < jobs_num; i++)
+		if ((arithmetic_series.mutex_cleaning) != NULL)
 		{
-			free (arithmetic_series.jobs_array[i].values_arr);
+			CloseHandle(arithmetic_series.mutex_cleaning);
 		}
-		free (arithmetic_series.jobs_array);
+		
+		if ((arithmetic_series.mutex_building) != NULL)
+		{
+			CloseHandle(arithmetic_series.mutex_building);
+		}
+		
+		if ((arithmetic_series.jobs_array) != NULL)
+		{
+			for (i = 0; i < jobs_num; i++)
+			{
+				free (arithmetic_series.jobs_array[i].values_arr);
+			}
+			free (arithmetic_series.jobs_array);
+		}
+
+		if (arithmetic_series.output_file != NULL)
+		{
+			fclose(arithmetic_series.output_file);
+		}
 	}
 
-	if (arithmetic_series.output_file != NULL)
-	{
-		fclose(arithmetic_series.output_file);
-	}
-	
-	LOG_INFO("Program End: 3 Series builder exited with exit code %d", error_code);
+	end_tick = GetTickCount();
+	LOG_INFO("Program End: 3 Series builder exited with exit code %d (total running time = %f)", error_code, (end_tick - start_tick) / 1000.0);
 	return error_code;
 }
 
@@ -477,16 +487,5 @@ BOOL InitilizeJobsArray (Series *series, int job_size, int jobs_num)
 		}
 	}
 
-	return TRUE;
-}
-
-BOOL RunThreadTest(Series *series, int jobs_num)
-{
-	int i;
-	LOG_INFO ("a1=%d, d=%d, q= %d",series->a1,series->d,series->q);
-	for (i = 0; i < series->jobs_num; i++)
-	{
-	LOG_INFO ("the starting index of this job is %d",series->jobs_array[i].starting_index);
-	}
 	return TRUE;
 }

@@ -19,7 +19,7 @@
 HANDLE work_semaphore;
 
 //-----Function Declarations ----//
-BOOL Clean(Series *series, BOOL *has_cleaned_series);
+BOOL Clean(Series *series, BOOL *has_cleaned_series, BOOL *is_cleaning_completed);
 
 BOOL Build(Series *series);
 
@@ -28,65 +28,78 @@ BOOL RunThread (Series *series)
 {
 	DWORD dwWaitResult;
 	BOOL has_cleaned_series = FALSE;
+	BOOL is_cleaning_completed = FALSE;
 	BOOL retval = FALSE;
 	BOOL result = FALSE;
 
 	LOG_INFO("Thread #%d started running", GetCurrentThreadId());
+	
 	//while we didn't get to the end of the series in the cleaning job
-	while (series->next_job_to_clean < series->jobs_num)
+	while (!is_cleaning_completed)
 	{
-	// Wait for work semaphore until there is work to do
-	dwWaitResult = WaitForSingleObject(work_semaphore, INFINITE);
-	if (dwWaitResult != WAIT_OBJECT_0) 
-	{
-		LOG_ERROR("Thread #%d: Failed to wait for work semaphore (wait result = %d)", GetCurrentThreadId(), dwWaitResult);
-		goto cleanup;
-	}
+		LOG_INFO("Thread #%d is about to enter the semaphore", GetCurrentThreadId());
 
-	if (!Clean(series, &has_cleaned_series))
-	{
-		LOG_ERROR("Thread #%d: Failed to clean the series", GetCurrentThreadId());
-		goto cleanup;
-	}
-
-	if (!has_cleaned_series)
-	{
-		if(!Build(series))
+		// Wait for work semaphore until there is work to do
+		dwWaitResult = WaitForSingleObject(work_semaphore, INFINITE);
+		if (dwWaitResult != WAIT_OBJECT_0) 
 		{
-			LOG_ERROR("Thread #%d: Failed to build the series", GetCurrentThreadId());
+			LOG_ERROR("Thread #%d: Failed to wait for work semaphore (wait result = %d)", GetCurrentThreadId(), dwWaitResult);
 			goto cleanup;
 		}
+		LOG_INFO("Thread #%d passed the semaphore", GetCurrentThreadId());
+
+		if (!Clean(series, &has_cleaned_series, &is_cleaning_completed))
+		{
+			LOG_ERROR("Thread #%d: Failed to clean the series", GetCurrentThreadId());
+			goto cleanup;
+		}
+
+		if (!has_cleaned_series)
+		{
+			if(!Build(series))
+			{
+				LOG_ERROR("Thread #%d: Failed to build the series", GetCurrentThreadId());
+				goto cleanup;
+			}
+		}
+
+		//// release work semaphore
+		//retval = ReleaseSemaphore(
+		//	work_semaphore,  // handle to semaphore
+		//	1,				// increase count by one
+		//	NULL);			// not interested in previous count
+
+		//if (!retval)
+		//{
+		//	LOG_ERROR("Thread #%d: Failed to release the work semaphore", GetCurrentThreadId());
+		//	goto cleanup;
+		//}
+
+		LOG_INFO("Thread #%d completed an iteration", GetCurrentThreadId());
 	}
 
-	// release work semaphore
-	retval = ReleaseSemaphore(
-		work_semaphore,  // handle to semaphore
-		1,				// increase count by one
-		NULL);			// not interested in previous count
-
-	if (!retval)
-	{
-		LOG_ERROR("Thread #%d: Failed to release the work semaphore", GetCurrentThreadId());
-		goto cleanup;
-	}
-	}
 	result = TRUE;
 
 cleanup:
+	LOG_INFO("Thread #%d finnished running with exit code %d", GetCurrentThreadId(), result);
 	return result;
 }
 
 
-BOOL Clean(Series *series, BOOL *has_cleaned_series)
+BOOL Clean(Series *series, BOOL *has_cleaned_series, BOOL *is_cleaning_completed)
 {
+	CleaningState cleaning_state;
 	DWORD dwWaitResult;
 	BOOL retval = FALSE;
 	BOOL result = FALSE;
 	BOOL is_series_ready_to_clean = FALSE;
+	BOOL should_release_work_semaphore = FALSE;
 	int i = 0;
 	int curr_job_id = 0;
 
 	LOG_INFO("Thread #%d started cleaning", GetCurrentThreadId());
+	
+	*is_cleaning_completed = FALSE;
 
 	// Wait until the building mutex is unlock
 	dwWaitResult = WaitForSingleObject(series->mutex_cleaning, INFINITE);
@@ -97,7 +110,8 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series)
 	}
 
 	//-----------Cleaning Mutex Critical Section (I)------------//
-	is_series_ready_to_clean = (series->cleaning_state == JOBS_TO_CLEAN);
+	cleaning_state = series->cleaning_state;
+	is_series_ready_to_clean = (cleaning_state == JOBS_TO_CLEAN);
 	if (is_series_ready_to_clean)
 	{
 		series->cleaning_state = CLEANING_IN_PROGRESS;
@@ -123,6 +137,10 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series)
 		//continue;
 		LOG_INFO("Thread #%d: Nothing to clean in series %d", GetCurrentThreadId(), series->type);
 		*has_cleaned_series = FALSE;
+		if (cleaning_state == CLEANING_COMPLETED)
+		{
+			*is_cleaning_completed = TRUE;
+		}
 		result = TRUE;
 		goto cleanup;
 	}
@@ -147,7 +165,21 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series)
 		);
 		series->jobs_array[curr_job_id].state = CLEANING;
 		CleanJob(series, curr_job_id);
-		series->jobs_array[curr_job_id].state = EMPTY;
+		// advance the job starting index by sub_seq_length (== jobs_num * job_size)
+		series->jobs_array[curr_job_id].starting_index += series->jobs_num * series->job_size;
+		if (series->jobs_array[curr_job_id].starting_index >= series->N)
+		{
+			series->jobs_array[curr_job_id].state = COMPLETED;
+			// *****************************************************************************************************************
+			// TODO: this solves a some-threads deadlock problem but will be problematic when adding the several series feature.
+			// We should think about it (how to release the semaphore when all the work is done and whether we are stucking the
+			// work in some way)
+			// *****************************************************************************************************************
+			should_release_work_semaphore = TRUE;
+		} else {
+			series->jobs_array[curr_job_id].state = EMPTY;
+			should_release_work_semaphore = TRUE;
+		}
 
 		// Now check if there was no job to build and set the next_job_to_build accordingly
 		// TBD: Do this just one time???
@@ -159,12 +191,11 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series)
 		}
 
 		//-----------Building Mutex Critical Section------------//
-		if (series->next_job_to_build == -1 && ((curr_job_id+series->jobs_num)*(series->job_size)<=series->N))//avoiding calcultion of larger than N indexes
+		if ((series->next_job_to_build == -1) && (series->jobs_array[curr_job_id].state == EMPTY))
 		{
 			series->next_job_to_build = curr_job_id;
 		}
 		//-------End Of Building Mutex Critical Section---------//
-		LOG_INFO("Thread #%d:finished to clean and set next_job_to_build to %d", GetCurrentThreadId(), curr_job_id);
 
 		// release the building mutex
 		retval = ReleaseMutex(series->mutex_building);
@@ -178,13 +209,25 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series)
 			goto cleanup;
 		}
 
-		// increment the curr_job_id to try cleaning the next job (if DONE)
-		curr_job_id++;
-		if (curr_job_id == series->jobs_num) //TBD:cyclic??
+		if (should_release_work_semaphore)
 		{
-			break; //if we were on the last job to clean->break
+			// release work semaphore to start a cleaner
+			retval = ReleaseSemaphore(
+				work_semaphore,  // handle to semaphore
+				1,				// increase count by one
+				NULL);			// not interested in previous count
+
+			if (!retval)
+			{
+				LOG_ERROR("Thread #%d: Failed to release the work semaphore", GetCurrentThreadId());
+				goto cleanup;
+			}
+
+			should_release_work_semaphore = FALSE;
 		}
-		//curr_job_id=curr_job_id%(series->jobs_num);
+
+		// increment the curr_job_id to try cleaning the next job (if DONE)
+		curr_job_id = (curr_job_id + 1) % (series->jobs_num);
 	}
 		
 	// Now change the cleaning state to NOTHING_TO_CLEAN
@@ -197,9 +240,15 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series)
 
 	//-----------Cleaning Mutex Critical Section------------//
 	series->next_job_to_clean = curr_job_id;
-	series->cleaning_state = NOTHING_TO_CLEAN;
+	if (series->jobs_array[curr_job_id].state == COMPLETED)
+	{
+		series->cleaning_state = CLEANING_COMPLETED;
+		*is_cleaning_completed = TRUE;
+	} else {
+		series->cleaning_state = NOTHING_TO_CLEAN;
+	}
 	//-------End Of Cleaning Mutex Critical Section---------//
-	
+
 	// release the cleaning mutex
 	retval = ReleaseMutex(series->mutex_cleaning);
 	if (!retval)
@@ -226,6 +275,7 @@ BOOL Build(Series *series)
 	BOOL retval = FALSE;
 	BOOL result = FALSE;
 	BOOL has_found_job_in_series = FALSE;
+	BOOL should_release_work_semaphore = FALSE;
 	int curr_job_id = -1;
 	int i = 0;
 	int j = 0;
@@ -260,15 +310,14 @@ BOOL Build(Series *series)
 		series->next_job_to_build = -1;
 		j = curr_job_id + 1;
 		for (k = 0; k < series->jobs_num; k++)
-		{//(series->jobs_array[j].starting_index<=series->N) we don't want to build indexes larger than N. starting index should be updated with mutex??
-			//another solution: use j*job_size+1
-			if (series->jobs_array[j%(series->jobs_num)].state == EMPTY && ((j*(series->job_size)+1)<=series->N))
+		{
+			if (series->jobs_array[j].state == EMPTY)
 			{
 				series->next_job_to_build = j;
 				LOG_INFO("Thread #%d: set next_job_to_build to %d", GetCurrentThreadId(), j);
 				break;
 			}
-			j = (j+1);
+			j = (j+1) % series->jobs_num;
 		}
 	}
 	//-------End Of Building Mutex Critical Section---------//
@@ -312,6 +361,8 @@ BOOL Build(Series *series)
 		if (series->next_job_to_clean == curr_job_id)
 		{
 			series->cleaning_state = JOBS_TO_CLEAN;
+			// in this case release the work semaphore to allow a sleeping thread to be awakened to start cleaning
+			should_release_work_semaphore = TRUE;
 		}
 	}
 	//-------End Of Cleaning Mutex Critical Section---------//
@@ -327,7 +378,22 @@ BOOL Build(Series *series)
 		);
 		goto cleanup;
 	}
-	
+
+	if (should_release_work_semaphore)
+	{
+		// release work semaphore to start a cleaner
+		retval = ReleaseSemaphore(
+			work_semaphore,  // handle to semaphore
+			1,				// increase count by one
+			NULL);			// not interested in previous count
+
+		if (!retval)
+		{
+			LOG_ERROR("Thread #%d: Failed to release the work semaphore", GetCurrentThreadId());
+			goto cleanup;
+		}
+	}
+
 	result = TRUE;
 
 cleanup:

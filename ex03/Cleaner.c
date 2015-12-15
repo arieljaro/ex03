@@ -49,9 +49,6 @@ BOOL CleanJob(Series *series, int job_id)
 		// clean value
 		job->values_arr[index_within_sector] = 0;
     }
-
-	// advance the job starting index by sub_seq_length (== jobs_num * job_size)
-	job->starting_index += series->jobs_num * series->job_size;
  
 	result = TRUE;
 cleanup:
