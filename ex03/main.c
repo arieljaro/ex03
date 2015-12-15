@@ -441,6 +441,7 @@ BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float
 	if ( mutex_building == NULL )
 	{
 		LOG_ERROR("failed to create mutex, returned with error %d",GetLastError());
+		CloseHandle(mutex_cleaning);
 		return FALSE;
 	}
 	series->mutex_building = mutex_building;
@@ -451,11 +452,13 @@ BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float
 BOOL InitilizeJobsArray (Series *series, int job_size, int jobs_num)
 {
 	int i=0;
+	BOOL result;
 	series->jobs_array = (JobArray)malloc(jobs_num * sizeof(JobObject));
 	if (series->jobs_array == NULL)
 	{
 		LOG_ERROR("failed to malloc memory");
-		return FALSE;
+		result= FALSE;
+		goto cleanup;
 	}
 	for (i = 0; i < jobs_num; i++)
 	{
@@ -472,7 +475,8 @@ BOOL InitilizeJobsArray (Series *series, int job_size, int jobs_num)
 		if (series->jobs_array[i].values_arr == NULL)
 		{
 			LOG_ERROR("failed to malloc memory");
-			return FALSE;
+			result= FALSE;
+			goto cleanup;
 		}
 
 		//allocate memory for the values built times
@@ -480,11 +484,31 @@ BOOL InitilizeJobsArray (Series *series, int job_size, int jobs_num)
 		if (series->jobs_array[i].built_time_arr == NULL)
 		{
 			LOG_ERROR("failed to malloc memory");
-			return FALSE;
+			result= FALSE;
+			goto cleanup;
 		}
 	}
-
-	return TRUE;
+	result = TRUE;
+cleanup:
+	//if we failed to malloc memory somewhere in this function, result is FALSE and we need to free the memory already allocated
+	if (result = FALSE)
+	{
+		if(series->jobs_array != NULL)
+		{
+			for (i = 0; i < jobs_num; i++)
+			{
+				if (series->jobs_array[i].values_arr != NULL)
+				{
+					free(series->jobs_array[i].values_arr);
+				}
+				if(series->jobs_array[i].built_time_arr != NULL)
+				{
+				free(series->jobs_array[i].built_time_arr);
+				}
+			}
+		}
+	}
+	return result;
 }
 
 BOOL destroy_series(Series *series_array, BOOL *were_series_initialized,int jobs_num )
