@@ -168,7 +168,7 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series, BOOL *is_cleaning_completed
 		// advance the job starting index by sub_seq_length (== jobs_num * job_size)
 		series->jobs_array[curr_job_id].starting_index += series->jobs_num * series->job_size;
 		if (series->jobs_array[curr_job_id].starting_index > series->N)
-		{
+	{
 			LOG_DEBUG("series->jobs_array[curr_job_id].starting_index (%d) >= series->N", series->jobs_array[curr_job_id].starting_index);
 			series->jobs_array[curr_job_id].state = COMPLETED;
 		} else {
@@ -204,7 +204,11 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series, BOOL *is_cleaning_completed
 			goto cleanup;
 		}
 
-		if (should_release_work_semaphore)
+		if (should_release_work_semaphore) ///what is the flow it remain false??? 
+											// (if the job is not empty we don't release the semaphore here. 
+											// There is a release also at the cleanup in case CLEANING_COMPLETED is 
+											// the cleaning_state. It might be the case that we can join both releases. 
+											// You can check this.
 		{
 			// release work semaphore to start a builder
 			retval = ReleaseSemaphore(
@@ -235,7 +239,7 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series, BOOL *is_cleaning_completed
 
 	//-----------Cleaning Mutex Critical Section------------//
 	series->next_job_to_clean = curr_job_id;
-	if (series->jobs_array[curr_job_id].state == COMPLETED)
+	if (series->jobs_array[curr_job_id].state == COMPLETED)//why if the cur job is is completed we complet all??? (we have just advanced the curr_job, so in fact it is the next one)
 	{
 		series->cleaning_state = CLEANING_COMPLETED;
 		*is_cleaning_completed = TRUE;

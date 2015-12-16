@@ -6,7 +6,7 @@
 //--------Library Includs--------//
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <math.h>
 //--------Project Includs--------//
 #include "Builder.h"
 #include "common.h"
@@ -46,6 +46,40 @@ BOOL BuildJob(Series *series, int job_id)
 			);
 		}
 		break;
+	case GEOMETRIC_SERIES:
+				for (i = 0; i < series->job_size; i++)
+		{
+			current_job->values_arr[i] = a1 *(powf(q,(current_job->starting_index + i-1)));
+			GetLocalTime(&current_job->built_time_arr[i]);
+			LOG_INFO(
+				"Index #%d = %f, calculated by thread %ld @ %02d:%02d:%02d.%3d\n", 
+				current_job->starting_index + i ,
+				current_job->values_arr[i],
+				current_job->builder_id,
+				current_job->built_time_arr[i].wHour,
+				current_job->built_time_arr[i].wMinute,
+				current_job->built_time_arr[i].wSecond,
+				current_job->built_time_arr[i].wMilliseconds
+			);
+		}
+		break;
+			case DIFFERENTIAL_SERIES:
+				for (i = 0; i < series->job_size; i++)
+		{//Computing geometric_series-arithmetic series (the order wasn't defined in the excersize, using this order)
+			current_job->values_arr[i] = a1 *(powf(q,(current_job->starting_index + i-1)))-(a1 + d * (current_job->starting_index + i-1));
+			GetLocalTime(&current_job->built_time_arr[i]);
+			LOG_INFO(
+				"Index #%d = %f, calculated by thread %ld @ %02d:%02d:%02d.%3d\n", 
+				current_job->starting_index + i ,
+				current_job->values_arr[i],
+				current_job->builder_id,
+				current_job->built_time_arr[i].wHour,
+				current_job->built_time_arr[i].wMinute,
+				current_job->built_time_arr[i].wSecond,
+				current_job->built_time_arr[i].wMilliseconds
+			);
+		}
+		break;
 	default:
 		LOG_ERROR("Thread #%d: Found illegal series type (%d)", thread_id, series->type);
 		goto cleanup;
@@ -56,3 +90,4 @@ BOOL BuildJob(Series *series, int job_id)
 cleanup:
 	return result;
 }
+
