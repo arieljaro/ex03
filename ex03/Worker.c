@@ -171,12 +171,6 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series, BOOL *is_cleaning_completed
 		{
 			LOG_DEBUG("series->jobs_array[curr_job_id].starting_index (%d) >= series->N", series->jobs_array[curr_job_id].starting_index);
 			series->jobs_array[curr_job_id].state = COMPLETED;
-			// *****************************************************************************************************************
-			// TODO: this solves a some-threads deadlock problem but will be problematic when adding the several series feature.
-			// We should think about it (how to release the semaphore when all the work is done and whether we are stucking the
-			// work in some way)
-			// *****************************************************************************************************************
-			//should_release_work_semaphore = TRUE;
 		} else {
 			series->jobs_array[curr_job_id].state = EMPTY;
 			should_release_work_semaphore = TRUE;
