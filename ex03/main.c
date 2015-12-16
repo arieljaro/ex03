@@ -210,7 +210,7 @@ int main(int argc, char *argv[])
 			error_code = THREAD_RUN_FAILED;
 			goto cleanup;
 		}
-		LOG_INFO("Thread number %d returned with exit code %d (1=success)\n", i, exitcode);
+		LOG_INFO("Thread number %d returned with exit code %d (1=success)", i, exitcode);
 		if(exitcode != TRUE)
 		{
 			LOG_ERROR("Thread number %d failed", i);

@@ -167,8 +167,9 @@ BOOL Clean(Series *series, BOOL *has_cleaned_series, BOOL *is_cleaning_completed
 		CleanJob(series, curr_job_id);
 		// advance the job starting index by sub_seq_length (== jobs_num * job_size)
 		series->jobs_array[curr_job_id].starting_index += series->jobs_num * series->job_size;
-		if (series->jobs_array[curr_job_id].starting_index >= series->N)
+		if (series->jobs_array[curr_job_id].starting_index > series->N)
 		{
+			LOG_DEBUG("series->jobs_array[curr_job_id].starting_index (%d) >= series->N", series->jobs_array[curr_job_id].starting_index);
 			series->jobs_array[curr_job_id].state = COMPLETED;
 			// *****************************************************************************************************************
 			// TODO: this solves a some-threads deadlock problem but will be problematic when adding the several series feature.

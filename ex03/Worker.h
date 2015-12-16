@@ -37,7 +37,7 @@ typedef enum{
 typedef struct JobObject_s{
 	JobState state;
 	DWORD builder_id;	 //Thread Is of the builder which built this values in the array
-	unsigned int starting_index;
+	int starting_index;
 	float *values_arr;	 //The values of the series
 						 //Each job contaning diffrent range in size of job_size,
 						 //where the relevant terms will be stored
@@ -67,7 +67,7 @@ typedef struct Series_s{
 	float a1;
 	float d;
 	float q;
-	unsigned int N;
+	int N;
 	unsigned int semaphore_size;
 } Series;
 

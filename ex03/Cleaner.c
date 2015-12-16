@@ -33,6 +33,12 @@ BOOL CleanJob(Series *series, int job_id)
     {
         //calculating the element index in series:
 		index_within_series = job->starting_index + index_within_sector;
+		
+		// avoid indices over N on this job (if any) to be printed
+		if (index_within_series > series->N)
+		{
+			break;
+		}
 
 		fprintf(
 			series->output_file, 
