@@ -41,7 +41,7 @@ BOOL CleanJob(Series *series, int job_id)
 		}
 
 		fprintf(
-			series->output_file, 
+			series->output_file,
 			"Index #%d = %f, calculated by thread %ld @ %02d:%02d:%02d.%3d\n", 
 			index_within_series,
 			job->values_arr[index_within_sector],

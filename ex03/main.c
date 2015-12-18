@@ -56,9 +56,6 @@ BOOL HandleParameters(
 	float *q
 );
 
-//$// debug function - to delete
-BOOL RunThreadTest(Series *series, int jobs_num);
-
 //--------Implementation--------//
 //--------Main--------//
 int main(int argc, char *argv[])
@@ -74,11 +71,11 @@ int main(int argc, char *argv[])
 	float q;
 	int jobs_num;
 	// TODO: should be volatile??
-	Series arithmetic_series;
 	Series series_array[SERIES_TYPES_COUNT];
+	SeriesType series_type;
 	int i;
 	unsigned int semaphore_size;
-	int j;
+	int k;
 	HANDLE *threads_handles = NULL; //an array to hold the handles, the size isn't known during compilation time
 	DWORD *threads_id = NULL;
 	DWORD exitcode;
@@ -142,28 +139,18 @@ int main(int argc, char *argv[])
 		goto cleanup;
 	}
 	
-	//----intilize The series structure---//
-	if(!IntializeSeries(&series_array[ARITHMETIC_SERIES], job_size, jobs_num, a1, d, q, N, semaphore_size, ARITHMETIC_SERIES))
+	//----intilize The series array structures---//
+	for (k = 0; k < SERIES_TYPES_COUNT; k++)
 	{
-		LOG_ERROR("Failed to intilize the arithmatic series");
-		error_code = INTIALIZE_SERIES_FAILED;
-		goto cleanup;
+		series_type = (SeriesType)k;
+		if(!IntializeSeries(&series_array[series_type], job_size, jobs_num, a1, d, q, N, semaphore_size, series_type))
+		{
+			LOG_ERROR("Failed to intilize the arithmatic series");
+			error_code = INTIALIZE_SERIES_FAILED;
+			goto cleanup;
+		}
+		were_series_initialized[series_type] = TRUE;
 	}
-	were_series_initialized[ARITHMETIC_SERIES] = TRUE;
-	if(!IntializeSeries(&series_array[GEOMETRIC_SERIES], job_size, jobs_num, a1, d, q, N, semaphore_size, GEOMETRIC_SERIES))
-	{
-		LOG_ERROR("Failed to intilize the geometric series");
-		error_code = INTIALIZE_SERIES_FAILED;
-		goto cleanup;
-	}
-	were_series_initialized[GEOMETRIC_SERIES] = TRUE;
-	if(!IntializeSeries(&series_array[DIFFERENTIAL_SERIES], job_size, jobs_num, a1, d, q, N, semaphore_size, DIFFERENTIAL_SERIES))
-	{
-		LOG_ERROR("Failed to intilize the diffrential between series series");
-		error_code = INTIALIZE_SERIES_FAILED;
-		goto cleanup;
-	}
-	were_series_initialized[DIFFERENTIAL_SERIES] = TRUE;
 
 	//----Starting threads workers---//
 	//creating an array of handles in num_of_workers size
@@ -241,8 +228,6 @@ int main(int argc, char *argv[])
 		threads_handles[i] = NULL;
 	}
 
-	//Clean(&series_array);
-
 	// If we reach this point then we set the error_code to success
 	error_code = SUCCESS;
 	
@@ -271,6 +256,7 @@ cleanup:
 	}
 
 	destroy_series(series_array, were_series_initialized, jobs_num);
+
 	end_tick = GetTickCount();
 	LOG_INFO("Program End: 3 Series builder exited with exit code %d (total running time = %f)", error_code, (end_tick - start_tick) / 1000.0);
 	return error_code;
@@ -293,7 +279,7 @@ BOOL HandleParameters(
 	int atoi_result;
 	double atof_result;
 
-//check for validity of number of arguments
+	//check for validity of number of arguments
 	if (argc < CMD_PARAMETERS_NUM)
 	{
 		LOG_ERROR("too few arguments were send to building series process, exiting");
@@ -492,6 +478,7 @@ BOOL InitilizeJobsArray (Series *series, int job_size, int jobs_num)
 		}
 	}
 	result = TRUE;
+
 cleanup:
 	//if we failed to malloc memory somewhere in this function, result is FALSE and we need to free the memory already allocated
 	if (result == FALSE)
@@ -517,7 +504,7 @@ cleanup:
 BOOL destroy_series(Series *series_array, BOOL *were_series_initialized,int jobs_num )
 {
 	int j,i;
-	for(j=0; j< SERIES_TYPES_COUNT; j++)
+	for(j=0; j < SERIES_TYPES_COUNT; j++)
 	{
 		if (were_series_initialized[j])
 		{

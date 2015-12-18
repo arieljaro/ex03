@@ -72,9 +72,6 @@ typedef struct Series_s{
 } Series;
 
 //--------Function Declarations--------//
-BOOL RunThread (Series *series);
-
-// TBD: remove this - needed for phase 1 only
-//BOOL Clean (Series *series);
+BOOL RunThread (Series *series_arr);
 
 #endif //WORKER_H
