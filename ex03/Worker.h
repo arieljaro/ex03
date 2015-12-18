@@ -35,7 +35,7 @@ typedef enum{
 } CleaningState;
 
 typedef struct JobObject_s{
-	JobState state;
+	volatile JobState state;
 	DWORD builder_id;	 //Thread Is of the builder which built this values in the array
 	int starting_index;
 	float *values_arr;	 //The values of the series
@@ -56,11 +56,11 @@ typedef enum {
 typedef struct Series_s{
 	SeriesType type;				// The series type
 	JobArray jobs_array;			// containg the Jobs array for the specific series. 
-	CleaningState cleaning_state; 
-	volatile HANDLE mutex_cleaning;			// A handle to the mutex for accessing cleaning related indicators
+	volatile CleaningState cleaning_state; 
+	HANDLE mutex_cleaning;			// A handle to the mutex for accessing cleaning related indicators
 	int next_job_to_clean;			// The next job number which a cleaner has to clean.
-	volatile HANDLE mutex_building;			// A handle to the mutex for accessing buildng related indicators
-	int next_job_to_build;			// Next job number which a builder has to built 
+	HANDLE mutex_building;			// A handle to the mutex for accessing buildng related indicators
+	volatile int next_job_to_build;		// Next job number which a builder has to built 
 	FILE *output_file;
 	int job_size;
 	int jobs_num;

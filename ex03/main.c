@@ -28,7 +28,7 @@ typedef enum {
 } CmdParameter;
 
 //--------Global Variables---------//
-volatile HANDLE work_semaphore = NULL;
+HANDLE work_semaphore = NULL;
 
 //--------Declarations--------//
 //The function gets a pointer to series typeand pwrameters of all series types: job_size, jobs num, a1,d, q and the type of the series
@@ -40,8 +40,12 @@ BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float
 //internal function in ItializeSeries, responsible for intilize the jobs array
 BOOL InitilizeJobsArray (Series *series, int job_size, int jobs_num);
 
-//Free all memory allocated for the series and close handles such as :mutex, file handle
-BOOL destroy_series(Series *series_array, BOOL *were_series_initialized,int jobs_num );
+//Free all memory allocated for all of the series and close handles such as :mutex, file handle
+void DestroyAllSeries(Series *series_array, BOOL *were_series_initialized,int jobs_num );
+
+//Free all memory allocated for the specified series and close handles such as :mutex, file handle
+void DestroySingleSeries(Series *series, int jobs_num);
+
 /* Reads the parametes and sets their values in the corresponding parameters */
 BOOL HandleParameters(
 	int argc,
@@ -50,7 +54,6 @@ BOOL HandleParameters(
 	int *N,
 	int *job_size,
 	int *sub_seq_length,
-//	int *failure_period,
 	float *a1,
 	float *d,
 	float *q
@@ -65,12 +68,10 @@ int main(int argc, char *argv[])
 	int N;
 	int job_size;
 	int sub_seq_length;
-	//int failure_period;
 	float a1;
 	float d;
 	float q;
 	int jobs_num;
-	// TODO: should be volatile??
 	Series series_array[SERIES_TYPES_COUNT];
 	SeriesType series_type;
 	int i;
@@ -89,6 +90,7 @@ int main(int argc, char *argv[])
 	{
 		were_series_initialized[i]=FALSE;
 	}
+
 	//----checking parameters and print---//
 	if (!HandleParameters(
 		argc,
@@ -97,7 +99,6 @@ int main(int argc, char *argv[])
 		&N,
 		&job_size,
 		&sub_seq_length,
-//		&failure_period,
 		&a1,
 		&d,
 		&q
@@ -255,10 +256,10 @@ cleanup:
 		CloseHandle(work_semaphore);
 	}
 
-	destroy_series(series_array, were_series_initialized, jobs_num);
+	DestroyAllSeries(series_array, were_series_initialized, jobs_num);
 
 	end_tick = GetTickCount();
-	LOG_INFO("Program End: 3 Series builder exited with exit code %d (total running time = %f)", error_code, (end_tick - start_tick) / 1000.0);
+	LOG_INFO("Program exited with exit code %d (total running time = %f)", error_code, (end_tick - start_tick) / 1000.0);
 	return error_code;
 }
 
@@ -271,7 +272,6 @@ BOOL HandleParameters(
 	int *N,
 	int *job_size,
 	int *sub_seq_length,
-//	int *failure_period,
 	float *a1,
 	float *d,
 	float *q
@@ -304,10 +304,10 @@ BOOL HandleParameters(
 	atoi_result = atoi(argv[CMD_PARAMETER_N_OFFSET]);
 	if ((errno == ERANGE) || (errno == EINVAL) || (atoi_result < 0))
 	{
-		LOG_ERROR("Wrong N parameter- number of indexes to compute ");
+		LOG_ERROR("Wrong N parameter (number of indexes to compute)");
 		return FALSE;
 	}
-	*N= atoi_result;
+	*N = atoi_result;
 
 	atoi_result = atoi(argv[CMD_PARAMETER_JOB_SIZE_OFFSET]);
 	if ((errno == ERANGE) || (errno == EINVAL) || (atoi_result <= 0))
@@ -315,7 +315,7 @@ BOOL HandleParameters(
 		LOG_ERROR("Wrong job size parameter");
 		return FALSE;
 	}
-	*job_size= atoi_result;
+	*job_size = atoi_result;
 
 	atoi_result = atoi(argv[CMD_PARAMETER_SUB_SEQ_LENGTH_OFFSET]);
 	if ((errno == ERANGE) || (errno == EINVAL) || (atoi_result <= 0))
@@ -323,7 +323,13 @@ BOOL HandleParameters(
 		LOG_ERROR("Wrong sub sequence length parameter");
 		return FALSE;
 	}
-	*sub_seq_length= atoi_result;
+	*sub_seq_length = atoi_result;
+
+	if ((*sub_seq_length % *job_size) != 0)
+	{
+		LOG_ERROR("sub_seq_length / job_size is not an integer");
+		return FALSE;
+	}
 
 	atof_result = atof(argv[CMD_PARAMETER_A1_OFFSET]);
 	if ((errno == ERANGE) || (errno == EINVAL))
@@ -361,6 +367,7 @@ BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float
 	const char *output_filename;
 	errno_t err = -1;
 	FILE *output_file = NULL;
+	BOOL result = FALSE;
 	
 	if (series == NULL)
 	{
@@ -380,6 +387,8 @@ BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float
 	series->next_job_to_clean = 0;
 	series->cleaning_state    = NOTHING_TO_CLEAN;
 	series->output_file		  = NULL;
+	series->mutex_building	  = NULL;
+	series->mutex_cleaning    = NULL;
 	
 	// open the series output file
 	switch (series->type)
@@ -400,7 +409,7 @@ BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float
     if (err != 0)
     {
         LOG_ERROR("couldn't create output file for series %d: couldn't open the file", series->type);
-        return FALSE;
+        goto cleanup;
     }
 	series->output_file = output_file;
 	
@@ -408,7 +417,7 @@ BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float
 	if (!InitilizeJobsArray(series, job_size, jobs_num))
 	{
 		LOG_ERROR("failed to initilize Jobs Array for the series");
-		return FALSE;
+		goto cleanup;
 	}
 
 	//Creating mutex// 
@@ -419,7 +428,7 @@ BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float
 	if ( mutex_cleaning == NULL )
 	{
 		LOG_ERROR("failed to create mutex, returned with error %d",GetLastError());
-		return FALSE;
+		goto cleanup;
 	}
 	series->mutex_cleaning = mutex_cleaning;
 
@@ -431,14 +440,21 @@ BOOL IntializeSeries(Series *series, int job_size, int jobs_num, float a1, float
 	{
 		LOG_ERROR("failed to create mutex, returned with error %d",GetLastError());
 		CloseHandle(mutex_cleaning);
-		return FALSE;
+		goto cleanup;
 	}
 	series->mutex_building = mutex_building;
 
-	return TRUE;
+	result = TRUE;
+
+cleanup:
+	if (!result)
+	{
+		DestroySingleSeries(series, jobs_num);
+	}
+	return result;
 }
 
-BOOL InitilizeJobsArray (Series *series, int job_size, int jobs_num)
+BOOL InitilizeJobsArray(Series *series, int job_size, int jobs_num)
 {
 	int i=0;
 	BOOL result = TRUE;
@@ -490,10 +506,12 @@ cleanup:
 				if (series->jobs_array[i].values_arr != NULL)
 				{
 					free(series->jobs_array[i].values_arr);
+					series->jobs_array[i].values_arr = NULL;
 				}
 				if(series->jobs_array[i].built_time_arr != NULL)
 				{
-				free(series->jobs_array[i].built_time_arr);
+					free(series->jobs_array[i].built_time_arr);
+					series->jobs_array[i].built_time_arr = NULL;
 				}
 			}
 		}
@@ -501,37 +519,45 @@ cleanup:
 	return result;
 }
 
-BOOL destroy_series(Series *series_array, BOOL *were_series_initialized,int jobs_num )
+
+void DestroyAllSeries(Series *series_array, BOOL *were_series_initialized, int jobs_num)
 {
-	int j,i;
+	int j;
 	for(j=0; j < SERIES_TYPES_COUNT; j++)
 	{
 		if (were_series_initialized[j])
 		{
-			if ((series_array[j].mutex_cleaning) != NULL)
-			{
-				CloseHandle(series_array[j].mutex_cleaning);
-			}
-		
-			if ((series_array[j].mutex_building) != NULL)
-			{
-				CloseHandle(series_array[j].mutex_building);
-			}
-		
-			if ((series_array[j].jobs_array) != NULL)
-			{
-				for (i = 0; i < jobs_num; i++)
-				{
-					free (series_array[j].jobs_array[i].values_arr);
-				}
-				free (series_array[j].jobs_array);
-			}
-
-			if (series_array[j].output_file != NULL)
-			{
-				fclose(series_array[j].output_file);
-			}
+			DestroySingleSeries(&(series_array[j]), jobs_num);
 		}
 	}
-	return TRUE;
+}
+
+
+void DestroySingleSeries(Series *series, int jobs_num)
+{
+	int i;
+
+	if ((series->mutex_cleaning) != NULL)
+	{
+		CloseHandle(series->mutex_cleaning);
+	}
+	
+	if ((series->mutex_building) != NULL)
+	{
+		CloseHandle(series->mutex_building);
+	}
+	
+	if ((series->jobs_array) != NULL)
+	{
+		for (i = 0; i < jobs_num; i++)
+		{
+			free (series->jobs_array[i].values_arr);
+		}
+		free (series->jobs_array);
+	}
+
+	if (series->output_file != NULL)
+	{
+		fclose(series->output_file);
+	}
 }

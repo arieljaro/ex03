@@ -10,7 +10,7 @@
 #include <WinBase.h>
 #include <tchar.h>
 
-//**********LOG LEVEL*******************//
+//*******DEFINED LOG LEVEL**************//
 #define _LOG_INFO
 //*************************************//
 
